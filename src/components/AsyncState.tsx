@@ -1,0 +1,4 @@
+import { AlertTriangle, Inbox, LoaderCircle, RotateCw } from 'lucide-react';
+export function LoadingState({ label = '正在加载...' }: { label?: string }) { return <div className="async-state" role="status"><LoaderCircle className="spin" aria-hidden="true" /><p>{label}</p></div>; }
+export function ErrorState({ message, retry }: { message: string; retry?: () => void }) { return <div className="async-state error" role="alert"><AlertTriangle aria-hidden="true" /><p>{message}</p>{retry && <button className="btn btn-secondary" onClick={retry}><RotateCw aria-hidden="true" />重试</button>}</div>; }
+export function EmptyState({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) { return <div className="async-state"><Inbox aria-hidden="true" /><h2>{title}</h2><p>{description}</p>{action}</div>; }

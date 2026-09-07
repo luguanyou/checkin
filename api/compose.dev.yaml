@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: attendance
+      MYSQL_USER: attendance
+      MYSQL_PASSWORD: attendance
+      MYSQL_ROOT_PASSWORD: local-development-only
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:33306:3306"
+    volumes:
+      - attendance_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-plocal-development-only"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  attendance_mysql_data:

@@ -1,0 +1,18 @@
+name: attendance-test
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: attendance_test
+      MYSQL_USER: attendance
+      MYSQL_PASSWORD: attendance
+      MYSQL_ROOT_PASSWORD: root-test-only
+      TZ: UTC
+    ports:
+      - "127.0.0.1:33307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot-test-only"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
