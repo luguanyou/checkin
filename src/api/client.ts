@@ -43,7 +43,8 @@ export class ApiClient {
   private readonly onSession?: (session: LoginResponse | null) => void;
 
   constructor(options: ApiClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? '/api/v1').replace(/\/$/, '');
+    // BASE_URL 跟随 Vite base（子路径部署时自动带上前缀，保持与页面同源）
+    this.baseUrl = (options.baseUrl ?? `${import.meta.env.BASE_URL}api/v1`).replace(/\/$/, '');
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.onSession = options.onSession;
   }
