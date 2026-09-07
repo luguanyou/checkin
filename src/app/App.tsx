@@ -5,6 +5,9 @@ import { AuthProvider } from './auth';
 import { queryClient } from './query-client';
 import { ToastProvider } from '../components/ToastProvider';
 
+// 子路径部署：路由 basename 跟随 Vite base（BASE_URL 以 / 结尾，去掉尾斜杠）。
+const routerBasename = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
+
 export function App() {
-  return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><AppRoutes /></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><BrowserRouter basename={routerBasename}><ToastProvider><AuthProvider><AppRoutes /></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
 }

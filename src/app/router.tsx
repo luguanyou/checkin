@@ -58,6 +58,6 @@ export function AppRoutes() {
         <Route path="attendance/:sessionId" element={<AttendancePage />} />
       </Route>
     </Route>
-    <Route path="*" element={<main className="not-found"><h1>页面不存在</h1><a href="/">返回工作台</a></main>} />
+    <Route path="*" element={<main className="not-found"><h1>页面不存在</h1><a href={import.meta.env.BASE_URL}>返回工作台</a></main>} />
   </Routes>;
 }
