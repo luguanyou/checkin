@@ -583,7 +583,7 @@ tags: [design, api, rest, fastapi, attendance]
 
 班级必须为 `ACTIVE`，所属课程必须为 `ACTIVE`，并且至少存在一个 `ACTIVE` 名单成员。服务端在同一事务创建场次和所有 `pending` 快照记录。
 
-成功返回包含全部记录的 `AttendanceSession`，状态码 `201`。同一班级和业务日期重复时返回 `DUPLICATE_RESOURCE`；空名单返回 `ROSTER_EMPTY`。
+成功返回包含全部记录的 `AttendanceSession`，状态码 `201`。同一班级和业务日期允许创建多个独立场次；空名单返回 `ROSTER_EMPTY`。
 
 #### `GET /api/v1/attendance-sessions/{session_id}`
 
@@ -630,9 +630,9 @@ tags: [design, api, rest, fastapi, attendance]
 
 #### `POST /api/v1/attendance-sessions/{session_id}/complete`
 
-无请求体。服务端锁定场次，重新检查不存在 `pending` 记录，然后将状态从 `DRAFT` 原子更新为 `COMPLETED`。
+无请求体。服务端锁定场次，然后将状态从 `DRAFT` 原子更新为 `COMPLETED`。场次可以包含 `pending` 记录，结束点名时保留这些记录的原状态。
 
-成功返回更新后的场次摘要，状态码 `200`。已完成场次重复调用时返回当前场次摘要并保持 `completed_at` 不变，使操作幂等。存在 `pending` 时返回 `ATTENDANCE_INCOMPLETE`，`details.pending_count` 给出数量。
+成功返回更新后的场次摘要，状态码 `200`。已完成场次重复调用时返回当前场次摘要并保持 `completed_at` 不变，使操作幂等。
 
 客户端在本地同步队列非空时不得调用此接口；服务端只能校验已提交数据库状态，不能确认客户端是否仍有未发送变更。
 
@@ -686,7 +686,6 @@ X-Content-Type-Options: nosniff
 | 422 | `PASSWORD_POLICY_VIOLATION` | 新密码不符合长度或复用规则 |
 | 422 | `ROSTER_VALIDATION_FAILED` | 预览存在禁止确认的行错误 |
 | 422 | `ROSTER_ROW_LIMIT_EXCEEDED` | 名单数据超过 500 行 |
-| 422 | `ATTENDANCE_INCOMPLETE` | 尚有 `pending` 记录 |
 | 413 | `FILE_TOO_LARGE` | 文件超过 10 MiB |
 | 429 | `RATE_LIMITED` | 登录或上传请求超过限制 |
 | 500 | `INTERNAL_ERROR` | 未预期服务端错误 |
@@ -720,7 +719,7 @@ Pydantic 字段校验失败必须转换为统一 `INVALID_REQUEST` 错误结构�
 - **AC-API-006**：Given 班级有 500 名有效学生，When 创建场次，Then 返回 `201` 和 500 条固定快照记录。
 - **AC-API-007**：Given 考勤记录版本为 3，When 使用版本 2 更新，Then 返回 409 和当前记录摘要。
 - **AC-API-008**：Given 首次更新响应丢失，When 使用相同 `client_mutation_id` 重试，Then 返回首次成功结果且版本和审计不再增加。
-- **AC-API-009**：Given 场次存在 `pending`，When 请求完成，Then 返回 `ATTENDANCE_INCOMPLETE` 和准确数量。
+- **AC-API-009**：Given 场次存在 `pending`，When 请求完成，Then 场次成功变为 `COMPLETED` 且 `pending` 记录保持不变。
 - **AC-API-010**：Given 已完成场次，When 不提供原因修改记录，Then 返回 `INVALID_REQUEST` 且状态不变。
 - **AC-API-011**：Given 已完成场次，When 导出 CSV，Then 响应流具有 BOM、固定列序、合规文件名和公式注入防护。
 - **AC-API-012**：Given 500 人场次，When 获取详情或导出，Then 单请求在目标服务器上低于 5 秒。
@@ -795,7 +794,7 @@ HTTP 状态码已经表达请求结果。单资源直接返回模型、列表使
 
 ### 9.3 完成请求与最后一次状态更新竞态
 
-客户端只有同步队列为空时才请求完成。服务端在事务中锁定场次并检查数据库不存在 `pending`。任何条件不满足都拒绝完成，从而避免只依赖前端状态。
+客户端只有同步队列为空时才请求完成。服务端在事务中锁定场次后完成状态迁移；数据库中的 `pending` 记录原样保留，不阻止场次完成。
 
 ### 9.4 上传扩展名伪装
 

@@ -147,13 +147,16 @@ def test_empty_archived_and_foreign_classes_are_rejected(
     assert foreign.status_code == 404
 
 
-def test_same_class_and_date_is_unique(attendance_context: AttendanceContext) -> None:
+def test_same_class_and_date_can_have_multiple_sessions(
+    attendance_context: AttendanceContext,
+) -> None:
     first = create_session(attendance_context)
-    duplicate = create_session(attendance_context)
+    second = create_session(attendance_context)
 
     assert first.status_code == 201
-    assert duplicate.status_code == 409
-    assert duplicate.json()["code"] == "DUPLICATE_RESOURCE"
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
+    assert first.json()["session_date"] == second.json()["session_date"]
 
 
 def test_list_filters_and_omits_records(attendance_context: AttendanceContext) -> None:

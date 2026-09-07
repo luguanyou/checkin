@@ -24,6 +24,10 @@ def test_initial_migration_creates_all_tables(engine: Engine) -> None:
 
 def test_attendance_constraints_exist(engine: Engine) -> None:
     inspector = inspect(engine)
+    session_unique_names = {
+        item["name"] for item in inspector.get_unique_constraints("attendance_sessions")
+    }
+    assert "uq_attendance_sessions_class_date" not in session_unique_names
     unique_names = {item["name"] for item in inspector.get_unique_constraints("attendance_records")}
     assert "uq_attendance_records_session_student" in unique_names
     index_names = {item["name"] for item in inspector.get_indexes("attendance_records")}

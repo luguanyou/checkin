@@ -322,7 +322,7 @@ users ──< login_sessions
 
 ### 4.9 `attendance_sessions`
 
-保存某班级某天的一次点名场次。
+保存某班级的一次点名场次；同一班级同一天允许保存多个场次。
 
 | 字段 | 类型 | 可空 | 默认值 | 约束或说明 |
 | --- | --- | --- | --- | --- |
@@ -338,7 +338,6 @@ users ──< login_sessions
 
 约束和索引：
 
-- `UNIQUE KEY uq_attendance_sessions_class_date (class_group_id, session_date)`
 - `INDEX ix_attendance_sessions_creator_date (created_by, session_date)`
 - `INDEX ix_attendance_sessions_class_status_date (class_group_id, status, session_date)`
 - `CHECK (status IN ('DRAFT', 'COMPLETED'))`
@@ -477,7 +476,7 @@ WHERE id = :record_id
 - **AC-DB-006**：Given 班级有 500 个有效名单成员，When 创建场次，Then 同一事务创建 500 条 `pending` 记录并写入固定快照。
 - **AC-DB-007**：Given 记录当前版本为 3，When 客户端以期望版本 2 更新，Then 更新影响 0 行且原记录不变。
 - **AC-DB-008**：Given 相同 `client_mutation_id` 的请求被重试，When 第二次写审计日志，Then 唯一约束阻止重复业务变更。
-- **AC-DB-009**：Given 场次仍有 `pending` 记录，When 请求完成场次，Then 事务拒绝状态迁移。
+- **AC-DB-009**：Given 场次仍有 `pending` 记录，When 请求完成场次，Then 事务允许状态迁移且考勤记录保持 `pending`。
 - **AC-DB-010**：Given 学生被移出名单且班级随后改名，When 查询历史场次，Then 考勤记录仍返回场次创建时的学生和班级快照。
 - **AC-DB-011**：Given 预览已过期或已确认，When 清理任务运行，Then 预览记录被删除且业务名单不受影响。
 - **AC-DB-012**：Given 应用数据库账号，When 尝试更新或删除审计日志，Then 权限或仓储层拒绝操作。

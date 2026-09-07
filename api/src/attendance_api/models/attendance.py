@@ -15,9 +15,6 @@ from attendance_api.models.base import (
 class AttendanceSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attendance_sessions"
     __table_args__ = (
-        UniqueConstraint(
-            "class_group_id", "session_date", name="uq_attendance_sessions_class_date"
-        ),
         CheckConstraint("status IN ('DRAFT', 'COMPLETED')", name="status"),
         CheckConstraint(
             "(status = 'DRAFT' AND completed_at IS NULL) OR "

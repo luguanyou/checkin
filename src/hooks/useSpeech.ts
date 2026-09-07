@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const DEFAULT_RATE = 0.9;
 const MIN_RATE = 0.5;
@@ -15,6 +15,8 @@ export function useSpeech() {
   const [rate, setRateState] = useState(readRate);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceNameState] = useState(() => typeof window === 'undefined' ? '' : window.localStorage.getItem('attendance.speech.voice') || '');
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestId = useRef(0);
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
   useEffect(() => {
@@ -25,6 +27,10 @@ export function useSpeech() {
     synthesis.addEventListener?.('voiceschanged', refresh);
     return () => synthesis.removeEventListener?.('voiceschanged', refresh);
   }, [supported]);
+
+  useEffect(() => () => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+  }, []);
 
   const voice = useMemo(() => voices.find((item) => item.voiceURI === voiceName || item.name === voiceName) ?? null, [voiceName, voices]);
   const setRate = useCallback((value: number) => {
@@ -39,14 +45,42 @@ export function useSpeech() {
   const speak = useCallback((text: string) => {
     if (muted || !supported || !text.trim()) return false;
     const synthesis = window.speechSynthesis;
+    const currentRequest = ++requestId.current;
+    if (retryTimer.current) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
     synthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = voice?.lang || 'zh-CN';
-    utterance.rate = rate;
-    utterance.volume = 1;
-    if (voice) utterance.voice = voice;
-    synthesis.resume?.();
-    synthesis.speak(utterance);
+    let retried = false;
+    const start = () => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = voice?.lang || 'zh-CN';
+      utterance.rate = rate;
+      utterance.volume = 1;
+      if (voice) utterance.voice = voice;
+      let started = false;
+      utterance.onstart = () => {
+        started = true;
+        if (currentRequest === requestId.current && retryTimer.current) {
+          clearTimeout(retryTimer.current);
+          retryTimer.current = null;
+        }
+      };
+      synthesis.resume?.();
+      synthesis.speak(utterance);
+      // Chromium can silently drop an utterance immediately after cancel().
+      // Retry once when no start event arrives, while keeping the latest call authoritative.
+      if (!retried) {
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          if (currentRequest !== requestId.current || started) return;
+          retried = true;
+          synthesis.cancel();
+          start();
+        }, 250);
+      }
+    };
+    start();
     return true;
   }, [muted, rate, supported, voice]);
   const toggleMuted = useCallback(() => setMuted((value) => !value), []);

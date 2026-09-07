@@ -30,7 +30,7 @@ export function summarizeRecords(records: AttendanceRecord[]) {
 }
 
 export function canCompleteSession(records: AttendanceRecord[], pendingMutations: number, failedMutations: number) {
-  return records.length > 0 && records.every((record) => record.status !== 'pending') && pendingMutations === 0 && failedMutations === 0;
+  return records.length > 0 && pendingMutations === 0 && failedMutations === 0;
 }
 
 export function exceptionRecords(records: AttendanceRecord[]) {

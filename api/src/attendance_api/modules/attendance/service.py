@@ -64,14 +64,6 @@ def create_attendance_session(
     )
     if class_group.status != "ACTIVE" or course.status != "ACTIVE":
         raise ApiError(409, "RESOURCE_STATE_CONFLICT", "已归档课程或班级不能创建考勤")
-    duplicate = db.scalar(
-        select(AttendanceSession.id).where(
-            AttendanceSession.class_group_id == class_group_id,
-            AttendanceSession.session_date == session_date,
-        )
-    )
-    if duplicate is not None:
-        raise ApiError(409, "DUPLICATE_RESOURCE", "该班级当天已存在考勤场次")
     roster = list(
         db.execute(
             select(Enrollment, Student)
@@ -95,42 +87,38 @@ def create_attendance_session(
         created_by=teacher.id,
     )
     db.add(attendance_session)
-    try:
-        db.flush()
-        for _enrollment, student in roster:
-            db.add(
-                AttendanceRecord(
-                    session_id=attendance_session.id,
-                    student_id=student.id,
-                    student_number_snapshot=student.student_number,
-                    student_name_snapshot=student.name,
-                    class_name_snapshot=class_group.name,
-                    status="pending",
-                    last_modified_by=teacher.id,
-                    version=1,
-                )
+    db.flush()
+    for _enrollment, student in roster:
+        db.add(
+            AttendanceRecord(
+                session_id=attendance_session.id,
+                student_id=student.id,
+                student_number_snapshot=student.student_number,
+                student_name_snapshot=student.name,
+                class_name_snapshot=class_group.name,
+                status="pending",
+                last_modified_by=teacher.id,
+                version=1,
             )
-        append_audit(
-            db,
-            actor_user_id=teacher.id,
-            action="ATTENDANCE_SESSION_CREATED",
-            entity_type="attendance_session",
-            entity_id=attendance_session.id,
-            before_value=None,
-            after_value={
-                "class_group_id": class_group.id,
-                "session_date": session_date.isoformat(),
-                "status": "DRAFT",
-                "record_count": len(roster),
-            },
-            reason=None,
-            ip_address=ip_address,
-            request_id=request_id,
         )
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise ApiError(409, "DUPLICATE_RESOURCE", "该班级当天已存在考勤场次") from None
+    append_audit(
+        db,
+        actor_user_id=teacher.id,
+        action="ATTENDANCE_SESSION_CREATED",
+        entity_type="attendance_session",
+        entity_id=attendance_session.id,
+        before_value=None,
+        after_value={
+            "class_group_id": class_group.id,
+            "session_date": session_date.isoformat(),
+            "status": "DRAFT",
+            "record_count": len(roster),
+        },
+        reason=None,
+        ip_address=ip_address,
+        request_id=request_id,
+    )
+    db.commit()
     return attendance_session, class_group, course
 
 
@@ -351,24 +339,6 @@ def complete_attendance_session(
     attendance_session, class_group, course = row
     if attendance_session.status == "COMPLETED":
         return attendance_session, class_group, course
-    pending_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(AttendanceRecord)
-            .where(
-                AttendanceRecord.session_id == attendance_session.id,
-                AttendanceRecord.status == "pending",
-            )
-        )
-        or 0
-    )
-    if pending_count:
-        raise ApiError(
-            422,
-            "ATTENDANCE_INCOMPLETE",
-            "仍有未确认的考勤记录",
-            {"pending_count": pending_count},
-        )
     completed_at = utc_now()
     attendance_session.status = "COMPLETED"
     attendance_session.completed_at = completed_at

@@ -227,14 +227,20 @@ def test_mutation_id_cannot_be_reused_for_another_record(record_context: RecordC
     assert reused.json()["code"] == "INVALID_REQUEST"
 
 
-def test_pending_records_block_completion(record_context: RecordContext) -> None:
+def test_pending_records_are_preserved_when_session_is_completed(
+    record_context: RecordContext, db_session: Session
+) -> None:
     response = record_context.client.post(
         f"/api/v1/attendance-sessions/{record_context.attendance_session.id}/complete"
     )
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "ATTENDANCE_INCOMPLETE"
-    assert response.json()["details"]["pending_count"] == 2
+    assert response.status_code == 200
+    assert response.json()["status"] == "COMPLETED"
+    db_session.refresh(record_context.attendance_session)
+    for record in record_context.records:
+        db_session.refresh(record)
+    assert record_context.attendance_session.status == "COMPLETED"
+    assert [record.status for record in record_context.records] == ["pending", "pending"]
 
 
 def test_completion_is_idempotent_and_preserves_timestamp(

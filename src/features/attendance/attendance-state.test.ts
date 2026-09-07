@@ -22,10 +22,10 @@ describe('attendance state', () => {
     expect(attendanceActionForKey('1', true)).toBeNull();
   });
 
-  it('summarizes records and blocks incomplete or syncing sessions', () => {
+  it('summarizes records and allows pending records when changes are synced', () => {
     const records = [record('present'), record('late'), record('absent'), record('pending')];
     expect(summarizeRecords(records)).toMatchObject({ total: 4, processed: 3, pending: 1, exceptions: 2, attendanceRate: 67 });
-    expect(canCompleteSession(records, 0, 0)).toBe(false);
+    expect(canCompleteSession(records, 0, 0)).toBe(true);
     expect(canCompleteSession(records.slice(0, 3), 1, 0)).toBe(false);
     expect(canCompleteSession(records.slice(0, 3), 0, 0)).toBe(true);
   });
