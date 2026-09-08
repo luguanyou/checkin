@@ -2,6 +2,10 @@
 
 前端采用 React、TypeScript 和 Vite，业务数据来自 `api/` 下的 FastAPI 服务。教师端覆盖登录、首次修改密码、工作台、课程班级、学生名单导入、课堂点名、考勤修正和 CSV/XLSX 导出；超级管理员登录后进入独立的简洁账号页面。
 
+## 使用文档
+
+- [管理员与教师使用教程](docs/admin-teacher-user-guide.md)：覆盖角色权限、教师账号管理、课程班级、名单导入、课堂点名、记录修正、导出与常见问题。
+
 ## 本地开发
 
 Windows 用户安装并启动 Docker Desktop、[uv](https://docs.astral.sh/uv/) 和 Node.js 后，可以双击根目录的 `start.bat`。脚本会自动启动持久化的开发 MySQL、安装或同步依赖、执行数据库迁移，并在独立窗口启动 API 和前端，服务就绪后会打开浏览器。

@@ -4,9 +4,19 @@ from datetime import date, datetime
 import pytest
 from argon2 import PasswordHasher
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from attendance_api.models import AttendanceSession, Course, Enrollment, Student, User
+from attendance_api.models import (
+    AttendanceRecord,
+    AttendanceSession,
+    ClassGroup,
+    Course,
+    Enrollment,
+    ImportPreview,
+    Student,
+    User,
+)
 
 PASSWORD = "teacher-password-123"
 
@@ -161,7 +171,7 @@ def test_archived_course_rejects_new_classes(teacher_context: TeacherContext) ->
     assert response.json()["code"] == "RESOURCE_STATE_CONFLICT"
 
 
-def test_course_and_class_archives_are_one_way(teacher_context: TeacherContext) -> None:
+def test_course_and_class_archives_can_be_restored(teacher_context: TeacherContext) -> None:
     course = create_course(teacher_context.client)
     class_group = teacher_context.client.post(
         f"/api/v1/courses/{course['id']}/classes", json={"name": "一班"}
@@ -178,8 +188,10 @@ def test_course_and_class_archives_are_one_way(teacher_context: TeacherContext) 
     )
 
     assert class_archived.status_code == 200
-    assert class_reactivate.status_code == 409
-    assert course_reactivate.status_code == 409
+    assert class_reactivate.status_code == 200
+    assert class_reactivate.json()["status"] == "ACTIVE"
+    assert course_reactivate.status_code == 200
+    assert course_reactivate.json()["status"] == "ACTIVE"
 
 
 def test_teacher_can_delete_empty_course_and_class(teacher_context: TeacherContext) -> None:
@@ -240,6 +252,92 @@ def test_class_delete_requires_no_roster_or_attendance(
 
     assert attendance_response.status_code == 409
     assert attendance_response.json()["code"] == "RESOURCE_STATE_CONFLICT"
+
+
+def test_teacher_can_explicitly_delete_class_and_all_related_data(
+    teacher_context: TeacherContext, db_session: Session
+) -> None:
+    course = create_course(teacher_context.client)
+    class_group = teacher_context.client.post(
+        f"/api/v1/courses/{course['id']}/classes", json={"name": "一班"}
+    ).json()
+    student = Student(student_number="20240002", name="学生")
+    db_session.add(student)
+    db_session.flush()
+    enrollment = Enrollment(
+        class_group_id=class_group["id"], student_id=student.id, status="ACTIVE"
+    )
+    attendance_session = AttendanceSession(
+        class_group_id=class_group["id"],
+        session_date=date(2026, 9, 7),
+        status="DRAFT",
+        started_at=datetime(2026, 9, 7, 9),
+        created_by=teacher_context.id,
+    )
+    preview = ImportPreview(
+        class_group_id=class_group["id"],
+        created_by=teacher_context.id,
+        source_filename="roster.csv",
+        normalized_rows=[],
+        validation_result={},
+        expires_at=datetime(2026, 9, 8, 9),
+    )
+    db_session.add_all([enrollment, attendance_session, preview])
+    db_session.flush()
+    record = AttendanceRecord(
+        session_id=attendance_session.id,
+        student_id=student.id,
+        student_number_snapshot=student.student_number,
+        student_name_snapshot=student.name,
+        class_name_snapshot=class_group["name"],
+        status="pending",
+        last_modified_by=teacher_context.id,
+        version=1,
+    )
+    db_session.add(record)
+    db_session.commit()
+    related_ids = {
+        "student": student.id,
+        "enrollment": enrollment.id,
+        "session": attendance_session.id,
+        "record": record.id,
+        "preview": preview.id,
+    }
+
+    response = teacher_context.client.delete(
+        f"/api/v1/classes/{class_group['id']}?delete_related_data=true"
+    )
+
+    assert response.status_code == 204
+    assert (
+        db_session.scalar(select(ClassGroup.id).where(ClassGroup.id == class_group["id"])) is None
+    )
+    assert (
+        db_session.scalar(select(Enrollment.id).where(Enrollment.id == related_ids["enrollment"]))
+        is None
+    )
+    assert (
+        db_session.scalar(
+            select(AttendanceSession.id).where(AttendanceSession.id == related_ids["session"])
+        )
+        is None
+    )
+    assert (
+        db_session.scalar(
+            select(AttendanceRecord.id).where(AttendanceRecord.id == related_ids["record"])
+        )
+        is None
+    )
+    assert (
+        db_session.scalar(
+            select(ImportPreview.id).where(ImportPreview.id == related_ids["preview"])
+        )
+        is None
+    )
+    assert (
+        db_session.scalar(select(Student.id).where(Student.id == related_ids["student"]))
+        == related_ids["student"]
+    )
 
 
 def test_delete_hides_foreign_resources(

@@ -1,11 +1,12 @@
 from collections import defaultdict
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from attendance_api.errors import ApiError
 from attendance_api.models import (
+    AttendanceRecord,
     AttendanceSession,
     ClassGroup,
     Course,
@@ -160,8 +161,6 @@ def update_course(
     request_id: str,
 ) -> Course:
     course = get_owned_course(db, teacher_id=teacher.id, course_id=course_id)
-    if course.status == "ARCHIVED" and changes.get("status") == "ACTIVE":
-        raise _resource_state_error("已归档课程不能重新启用")
     target_code = changes.get("code") or course.code
     target_term = changes.get("term") or course.term
     duplicate = db.scalar(
@@ -251,8 +250,6 @@ def update_class_group(
     class_group, _course = get_owned_class_group(
         db, teacher_id=teacher.id, class_group_id=class_group_id
     )
-    if class_group.status == "ARCHIVED" and changes.get("status") == "ACTIVE":
-        raise _resource_state_error("已归档班级不能重新启用")
     target_name = changes.get("name") or class_group.name
     duplicate = db.scalar(
         select(ClassGroup.id).where(
@@ -335,6 +332,7 @@ def delete_class_group(
     *,
     teacher: User,
     class_group_id: str,
+    delete_related_data: bool,
     ip_address: str,
     request_id: str,
 ) -> None:
@@ -365,8 +363,27 @@ def delete_class_group(
         )
         or 0
     )
-    if enrollment_count or session_count or preview_count:
+    if (enrollment_count or session_count or preview_count) and not delete_related_data:
         raise _resource_state_error("班级存在名单或考勤数据，无法删除")
+    record_count = 0
+    if delete_related_data:
+        session_ids = select(AttendanceSession.id).where(
+            AttendanceSession.class_group_id == class_group.id
+        )
+        record_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(AttendanceRecord)
+                .where(AttendanceRecord.session_id.in_(session_ids))
+            )
+            or 0
+        )
+        db.execute(delete(AttendanceRecord).where(AttendanceRecord.session_id.in_(session_ids)))
+        db.execute(
+            delete(AttendanceSession).where(AttendanceSession.class_group_id == class_group.id)
+        )
+        db.execute(delete(ImportPreview).where(ImportPreview.class_group_id == class_group.id))
+        db.execute(delete(Enrollment).where(Enrollment.class_group_id == class_group.id))
     append_audit(
         db,
         actor_user_id=teacher.id,
@@ -377,6 +394,12 @@ def delete_class_group(
             "course_id": class_group.course_id,
             "name": class_group.name,
             "status": class_group.status,
+            "deleted_related_data": {
+                "attendance_records": record_count,
+                "attendance_sessions": session_count,
+                "import_previews": preview_count,
+                "enrollments": enrollment_count,
+            },
         },
         after_value=None,
         reason=None,

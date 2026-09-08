@@ -204,12 +204,14 @@ def delete_class_group(
     db: Annotated[Session, Depends(get_db)],
     teacher: Annotated[User, Depends(require_teacher)],
     password_changed: Annotated[User, Depends(require_password_changed)],
+    delete_related_data: Annotated[bool, Query()] = False,
 ) -> None:
     ip_address, request_id = _request_context(request)
     service.delete_class_group(
         db,
         teacher=teacher,
         class_group_id=class_group_id,
+        delete_related_data=delete_related_data,
         ip_address=ip_address,
         request_id=request_id,
     )

@@ -59,7 +59,7 @@ describe('course resources', () => {
     await api.courses.update('course-1', { name: '新课程' });
     await api.courses.updateClass('class-1', { name: '新班级' });
     await api.courses.delete('course-1');
-    await api.courses.deleteClass('class-1');
+    await api.courses.deleteClass('class-1', true);
 
     expect(fetcher).toHaveBeenNthCalledWith(1, '/api/v1/courses/course-1', expect.objectContaining({
       method: 'PATCH', body: JSON.stringify({ name: '新课程' }),
@@ -68,6 +68,6 @@ describe('course resources', () => {
       method: 'PATCH', body: JSON.stringify({ name: '新班级' }),
     }));
     expect(fetcher).toHaveBeenNthCalledWith(3, '/api/v1/courses/course-1', expect.objectContaining({ method: 'DELETE' }));
-    expect(fetcher).toHaveBeenNthCalledWith(4, '/api/v1/classes/class-1', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetcher).toHaveBeenNthCalledWith(4, '/api/v1/classes/class-1?delete_related_data=true', expect.objectContaining({ method: 'DELETE' }));
   });
 });

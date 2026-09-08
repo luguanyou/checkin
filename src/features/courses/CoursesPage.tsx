@@ -23,12 +23,12 @@ export function CoursesPage() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedClass, setSelectedClass] = useState<ClassGroup | null>(null);
   const query = useQuery({ queryKey: ['courses', { page, q, status }], queryFn: () => api.courses.list({ page, page_size: 20, q: q || undefined, status }) });
-  const archive = useMutation({ mutationFn: (course: Course) => api.courses.update(course.id, { status: course.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' }), onSuccess: () => { toast.show('课程状态已更新'); void queryClient.invalidateQueries({ queryKey: ['courses'] }); } });
+  const archive = useMutation({ mutationFn: (course: Course) => api.courses.update(course.id, { status: course.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' }), onSuccess: () => { toast.show('课程状态已更新'); void queryClient.invalidateQueries({ queryKey: ['courses'] }); }, onError: (reason) => toast.show((reason as Error).message) });
   const deleteCourse = useMutation({ mutationFn: (course: Course) => api.courses.delete(course.id), onSuccess: () => { toast.show('课程已删除'); void queryClient.invalidateQueries({ queryKey: ['courses'] }); }, onError: (reason) => toast.show((reason as Error).message) });
-  const deleteClass = useMutation({ mutationFn: (item: ClassGroup) => api.courses.deleteClass(item.id), onSuccess: () => { toast.show('班级已删除'); void queryClient.invalidateQueries({ queryKey: ['courses'] }); }, onError: (reason) => toast.show((reason as Error).message) });
+  const deleteClass = useMutation({ mutationFn: (item: ClassGroup) => api.courses.deleteClass(item.id, true), onSuccess: () => { toast.show('班级及关联数据已删除'); void queryClient.invalidateQueries({ queryKey: ['courses'] }); }, onError: (reason) => toast.show((reason as Error).message) });
   function update(key: string, value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); if (key !== 'page') next.set('page', '1'); setParams(next); }
   function confirmDeleteCourse(course: Course) { if (window.confirm(`确定删除课程“${course.name}”吗？删除后不可恢复。`)) deleteCourse.mutate(course); }
-  function confirmDeleteClass(item: ClassGroup) { if (window.confirm(`确定删除班级“${item.name}”吗？删除后不可恢复。`)) deleteClass.mutate(item); }
+  function confirmDeleteClass(item: ClassGroup) { if (window.confirm(`确定删除班级“${item.name}”吗？该班级的学生名单和全部历史考勤记录将永久删除，且无法恢复。`)) deleteClass.mutate(item); }
   if (query.isLoading) return <LoadingState label="正在加载课程..." />;
   if (query.error) return <ErrorState message={query.error.message} retry={() => void query.refetch()} />;
   const items = query.data?.items ?? [];

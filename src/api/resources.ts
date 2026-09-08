@@ -54,7 +54,10 @@ export function createApi(client: ApiClient) {
       createClass: (courseId: string, name: string) => client.request(`/courses/${courseId}/classes`, json('POST', { name })),
       updateClass: (classId: string, input: { name?: string; status?: string }) => client.request<ClassGroup>(`/classes/${classId}`, json('PATCH', input)),
       delete: (id: string) => client.request<void>(`/courses/${id}`, { method: 'DELETE' }),
-      deleteClass: (classId: string) => client.request<void>(`/classes/${classId}`, { method: 'DELETE' }),
+      deleteClass: (classId: string, deleteRelatedData = false) => client.request<void>(
+        `/classes/${classId}${queryString({ delete_related_data: deleteRelatedData ? 'true' : undefined })}`,
+        { method: 'DELETE' },
+      ),
     },
     roster: {
       list: (classId: string, params: { page?: number; page_size?: number; status?: string; q?: string } = {}) => client.request<RosterPage>(`/classes/${classId}/roster${queryString(params)}`),

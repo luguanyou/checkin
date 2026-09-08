@@ -47,6 +47,17 @@ describe('business pages', () => {
     expect(screen.getByRole('link', { name: '管理名单' })).toHaveAttribute('href', '/classes/class-1/roster');
   });
 
+  it('restores an archived course', async () => {
+    const user = userEvent.setup();
+    api.courses.list.mockResolvedValue({ ...page, items: [{ ...course, status: 'ARCHIVED' }] });
+    api.courses.update.mockResolvedValue({ ...course, status: 'ACTIVE' });
+    render(wrapper(<CoursesPage />, '/courses?status=ARCHIVED'));
+
+    await user.click(await screen.findByRole('button', { name: '恢复课程' }));
+
+    await waitFor(() => expect(api.courses.update).toHaveBeenCalledWith('course-1', { status: 'ACTIVE' }));
+  });
+
   it('edits course and class names', async () => {
     const user = userEvent.setup();
     api.courses.update.mockResolvedValue({ ...course, name: '新课程名' });
@@ -76,10 +87,25 @@ describe('business pages', () => {
     render(wrapper(<CoursesPage />));
 
     await user.click(await screen.findByRole('button', { name: '删除班级 2024 级 2 班' }));
-    await waitFor(() => expect(api.courses.deleteClass).toHaveBeenCalledWith('class-1'));
+    await waitFor(() => expect(api.courses.deleteClass).toHaveBeenCalledWith('class-1', true));
     await user.click(screen.getByRole('button', { name: '删除课程' }));
     await waitFor(() => expect(api.courses.delete).toHaveBeenCalledWith('course-1'));
     expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/学生名单.*历史考勤记录.*永久删除.*无法恢复/));
+    confirm.mockRestore();
+  });
+
+  it('deletes the current class from its roster page', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    api.courses.deleteClass.mockResolvedValue(undefined);
+    render(wrapper(<Routes><Route path="/classes/:classId/roster" element={<RosterPage />} /><Route path="/courses" element={<div>课程班级页</div>} /></Routes>, '/classes/class-1/roster'));
+
+    await user.click(await screen.findByRole('button', { name: '删除班级' }));
+
+    await waitFor(() => expect(api.courses.deleteClass).toHaveBeenCalledWith('class-1', true));
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/学生名单.*历史考勤记录.*永久删除.*无法恢复/));
+    expect(await screen.findByText('课程班级页')).toBeInTheDocument();
     confirm.mockRestore();
   });
 
