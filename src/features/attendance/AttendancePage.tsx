@@ -16,7 +16,10 @@ const controls: { status: Exclude<AttendanceStatus, 'pending'>; label: string; k
 ];
 
 export function AttendancePage() {
-  const { sessionId = '' } = useParams(); const api = useApi(); const navigate = useNavigate(); const queryClient = useQueryClient(); const speech = useSpeech();
+  const { sessionId = '' } = useParams(); const api = useApi(); const navigate = useNavigate(); const queryClient = useQueryClient(); const speech = useSpeech({
+    // 服务器 TTS 音频兜底：Chrome（国内拉不到 Google 语音包）等环境系统语音无声时自动改播 MP3
+    audioFallback: (text, rate) => api.tts.speak(text, rate),
+  });
   const query = useQuery({ queryKey: ['session', sessionId], queryFn: () => api.attendance.get(sessionId) });
   const [records, setRecords] = useState<AttendanceRecord[]>([]); const recordsRef = useRef(records); const [index, setIndex] = useState(0);
   const [pending, setPending] = useState(0); const [failed, setFailed] = useState(0); const [error, setError] = useState(''); const [showEnd, setShowEnd] = useState(false); const [completing, setCompleting] = useState(false);

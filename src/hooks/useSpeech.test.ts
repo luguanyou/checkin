@@ -109,4 +109,23 @@ describe('useSpeech', () => {
     act(() => { vi.advanceTimersByTime(0); });
     expect(result.current.error).toContain('语音播报失败');
   });
+
+  it('falls back to server audio when the browser has no voices (e.g. Chrome in mainland China)', async () => {
+    // 引擎就绪但语音列表为空 → 不再试探系统语音，直接服务器音频兜底
+    speak.mockImplementation(() => { /* silent */ });
+    (window.speechSynthesis as unknown as { getVoices: () => SpeechSynthesisVoice[] }).getVoices = () => [];
+    const audioFallback = vi.fn<(text: string, rate: number) => Promise<Blob>>(async () => new Blob(['mp3'], { type: 'audio/mpeg' }));
+    class FakeAudio { src = ''; async play() { /* noop */ } pause() { /* noop */ } load() { /* noop */ } removeAttribute() { /* noop */ } }
+    vi.stubGlobal('Audio', FakeAudio);
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:mock', revokeObjectURL: () => undefined });
+    const { result } = renderHook(() => useSpeech({ audioFallback }));
+    act(() => result.current.speak('张敏'));
+    await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve(); });
+
+    expect(speak).not.toHaveBeenCalled(); // 系统语音未被调用
+    expect(audioFallback).toHaveBeenCalledTimes(1);
+    expect(audioFallback.mock.calls[0][0]).toBe('张敏');
+    expect(result.current.error).toBe('');
+    vi.unstubAllGlobals();
+  });
 });
