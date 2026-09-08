@@ -27,6 +27,6 @@ describe('AttendancePage', () => {
     expect(await screen.findByRole('heading', { name: '李明' })).toBeInTheDocument();
     await waitFor(() => expect(api.attendance.updateRecord).toHaveBeenCalledWith('r1', expect.objectContaining({ status: 'absent', expected_version: 1 })));
     expect(speak).toHaveBeenCalledTimes(1);
-    expect(speak).toHaveBeenCalledWith('鏉庢槑');
+    expect(speak).toHaveBeenCalledWith('李明');
   });
 });

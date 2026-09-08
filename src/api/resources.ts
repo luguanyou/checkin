@@ -77,6 +77,10 @@ export function createApi(client: ApiClient) {
       complete: (sessionId: string) => client.request<AttendanceSessionBase>(`/attendance-sessions/${sessionId}/complete`, { method: 'POST' }),
       export: (sessionId: string, format: 'csv' | 'xlsx') => client.download(`/attendance-sessions/${sessionId}/export?format=${format}`),
     },
+    tts: {
+      /** 服务器语音合成（点名播报兜底），返回音频 Blob */
+      speak: (text: string, rate: number) => client.download(`/tts/speak?text=${encodeURIComponent(text)}&rate=${rate}`).then((file) => file.blob),
+    },
   };
 }
 
