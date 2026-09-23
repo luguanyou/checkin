@@ -56,7 +56,18 @@ async function handleScoreRequest({ route, endpoint, method, url, book, json, er
     book.settings = { base_score: body.base_score, factors: body.factors };
   } else if (suffix === '/items' && method === 'POST') {
     const { expected_version, ...item } = body;
-    book.items.push({ ...item, id: `score-item-${book.items.length + 1}` });
+    const created = { ...item, id: `score-item-${book.items.length + 1}` };
+    book.items.push(created);
+    for (const student of book.students.filter((row) => row.enrollment_status === 'ACTIVE')) {
+      book.records.push({
+        id: `score-record-${book.records.length + 1}`,
+        item_id: created.id,
+        enrollment_id: student.enrollment_id,
+        points: created.default_points ?? null,
+        note: '',
+        updated_at: '2026-09-22T09:00:00Z',
+      });
+    }
   } else {
     const match = suffix.match(/^\/items\/([^/]+)(\/records)?$/);
     if (!match) { await error('NOT_FOUND', '成绩接口不存在', 404); return true; }

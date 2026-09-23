@@ -30,7 +30,7 @@ export function ScoreEditor({ book, onBook, onDirty }: { book: ScoreBook; onBook
   const dirty = Object.keys(drafts).length > 0 || settingsDirty || itemDirty;
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
   const locked = book.readonly || pending;
-  function original(enrollmentId: string): RowDraft { const row = book.records.find((record) => record.item_id === item?.id && record.enrollment_id === enrollmentId); return { points: row?.points ?? '', note: row?.note ?? '' }; }
+  function original(enrollmentId: string): RowDraft { const row = book.records.find((record) => record.item_id === item?.id && record.enrollment_id === enrollmentId); return { points: row ? (row.points ?? '') : (item?.default_points ?? ''), note: row?.note ?? '' }; }
   function updateRow(enrollmentId: string, update: Partial<RowDraft>) {
     if (item) setSelectedItemId(item.id);
     if (!Object.keys(drafts).length) setRecordVersion(book.version);

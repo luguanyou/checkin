@@ -58,6 +58,7 @@ class ScoreItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120))
     occurred_on: Mapped[date] = mapped_column(Date)
     description: Mapped[str] = mapped_column(String(500), default="")
+    default_points: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
 
 
 class ScoreRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -13,7 +13,7 @@ vi.mock('../../app/auth', () => ({ useApi: () => api }));
 const book: ScoreBook = {
   class_group: { id: 'c1', name: '一班', status: 'ACTIVE' }, course: { id: 'course1', name: '软件工程', status: 'ACTIVE' }, version: 2, readonly: false, rules_ready: false,
   settings: { base_score: '70', factors: { HOMEWORK: null, LAB: null, CLASSROOM: null, OTHER: null } },
-  items: [{ id: 'i1', category: 'HOMEWORK', name: '作业 1', occurred_on: '2026-09-22', description: '' }, { id: 'i2', category: 'HOMEWORK', name: '作业 2', occurred_on: '2026-09-23', description: '' }],
+  items: [{ id: 'i1', category: 'HOMEWORK', name: '作业 1', occurred_on: '2026-09-22', description: '', default_points: null }, { id: 'i2', category: 'HOMEWORK', name: '作业 2', occurred_on: '2026-09-23', description: '', default_points: null }],
   students: [{ enrollment_id: 'e1', student_id: 's1', student_number: '01', student_name: '张敏', enrollment_status: 'ACTIVE' }, { enrollment_id: 'e2', student_id: 's2', student_number: '02', student_name: '李明', enrollment_status: 'REMOVED' }],
   records: [{ id: 'r1', item_id: 'i1', enrollment_id: 'e1', points: null, note: '', updated_at: '' }, { id: 'r2', item_id: 'i1', enrollment_id: 'e2', points: '0', note: '', updated_at: '' }], summaries: [],
 };
@@ -68,14 +68,25 @@ describe('usual scores', () => {
     expect(screen.getByRole('button', { name: '保存本次录入' })).toBeEnabled();
   });
   it('creates a dated project in its chosen category without requiring scoring rules', async () => {
-    const user = userEvent.setup(); const newItem = { id: 'i3', category: 'LAB', name: '实验环境搭建', occurred_on: '2026-09-22', description: '操作系统' };
+    const user = userEvent.setup(); const newItem = { id: 'i3', category: 'LAB', name: '实验环境搭建', occurred_on: '2026-09-22', description: '操作系统', default_points: '3' };
     api.scores.createItem.mockResolvedValue({ ...structuredClone(book), items: [...book.items, newItem] }); mount(); await screen.findByLabelText('张敏本次积分');
     await user.click(screen.getByRole('button', { name: '新建项目' }));
     await user.selectOptions(screen.getByLabelText('所属类别'), 'LAB'); await user.type(screen.getByLabelText('项目名称'), newItem.name);
+    fireEvent.change(screen.getByLabelText('项目默认积分'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('项目日期'), { target: { value: newItem.occurred_on } }); await user.type(screen.getByLabelText('项目说明'), newItem.description);
     await user.click(screen.getByRole('button', { name: '创建项目' }));
-    await waitFor(() => expect(api.scores.createItem).toHaveBeenCalledWith('c1', { expected_version: 2, category: 'LAB', name: newItem.name, occurred_on: newItem.occurred_on, description: newItem.description }));
+    await waitFor(() => expect(api.scores.createItem).toHaveBeenCalledWith('c1', { expected_version: 2, category: 'LAB', name: newItem.name, occurred_on: newItem.occurred_on, description: newItem.description, default_points: '3' }));
     expect(screen.getByLabelText('当前项目')).toHaveValue('i3');
+  });
+  it('edits a project default without replacing individual student scores', async () => {
+    const user = userEvent.setup();
+    api.scores.updateItem.mockResolvedValue({ ...structuredClone(book), items: [{ ...book.items[0], default_points: '4' }, book.items[1]] });
+    mount();
+    await screen.findByLabelText('张敏本次积分');
+    await user.click(screen.getByRole('button', { name: '编辑项目' }));
+    fireEvent.change(screen.getByLabelText('项目默认积分'), { target: { value: '4' } });
+    await user.click(screen.getByRole('button', { name: '保存项目' }));
+    await waitFor(() => expect(api.scores.updateItem).toHaveBeenCalledWith('c1', 'i1', expect.objectContaining({ expected_version: 2, default_points: '4' })));
   });
   it('locks an archived book but still allows summary and detail exports', async () => {
     const user = userEvent.setup(); api.scores.get.mockResolvedValue({ ...structuredClone(book), readonly: true }); mount();

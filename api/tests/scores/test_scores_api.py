@@ -65,19 +65,59 @@ def scores(client: TestClient, db_session: Session) -> tuple[TestClient, str, li
     return client, f"/api/v1/classes/{group.id}/scores", ids
 
 
-def add_item(client: TestClient, url: str, version: int = 0, category: str = "HOMEWORK") -> dict:
+def add_item(
+    client: TestClient,
+    url: str,
+    version: int = 0,
+    category: str = "HOMEWORK",
+    default_points: str | None = None,
+) -> dict:
+    payload = {
+        "expected_version": version,
+        "category": category,
+        "name": " 作业1 ",
+        "occurred_on": "2026-09-22",
+        "description": "说明",
+    }
+    if default_points is not None:
+        payload["default_points"] = default_points
     response = client.post(
         url + "/items",
-        json={
-            "expected_version": version,
-            "category": category,
-            "name": " 作业1 ",
-            "occurred_on": "2026-09-22",
-            "description": "说明",
-        },
+        json=payload,
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_project_default_points_seed_records_and_remain_editable(scores) -> None:
+    client, url, ids = scores
+    book = add_item(client, url, default_points="3")
+    item = book["items"][0]
+
+    assert item["default_points"] == "3"
+    assert [record["points"] for record in book["records"]] == ["3", "3"]
+
+    saved = client.put(
+        f"{url}/items/{item['id']}/records",
+        json={
+            "expected_version": 1,
+            "records": [{"enrollment_id": ids[0], "points": "5"}],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    saved_record = next(
+        record for record in saved.json()["records"] if record["enrollment_id"] == ids[0]
+    )
+    assert saved_record["points"] == "5"
+
+    changed = client.patch(
+        f"{url}/items/{item['id']}",
+        json={"expected_version": 2, "default_points": "4"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["items"][0]["default_points"] == "4"
+    records = {record["enrollment_id"]: record["points"] for record in changed.json()["records"]}
+    assert records == {ids[0]: "5", ids[1]: "3"}
 
 
 def set_rules(client: TestClient, url: str, version: int, base: str | None = "70") -> dict:

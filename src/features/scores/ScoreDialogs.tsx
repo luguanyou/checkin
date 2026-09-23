@@ -5,20 +5,21 @@ import type { ScoreBook, ScoreCategory, ScoreItem, ScoreStudent } from '../../ap
 import { useApi } from '../../app/auth';
 import { Dialog } from '../../components/Dialog';
 import { EmptyState, ErrorState, LoadingState } from '../../components/AsyncState';
-import { categories } from './score-utils';
+import { categories, validDecimal } from './score-utils';
 
 export function ScoreItemDialog({ book, initial, category, close, done, onDirty }: { book: ScoreBook; initial?: ScoreItem; category: ScoreCategory; close(): void; done(book: ScoreBook, itemId: string): void; onDirty(dirty: boolean): void }) {
   const api = useApi(); const [name, setName] = useState(initial?.name ?? ''); const [kind, setKind] = useState(category);
   const [initialDate] = useState(initial?.occurred_on ?? new Date().toLocaleDateString('sv-SE'));
   const [date, setDate] = useState(initialDate);
   const [description, setDescription] = useState(initial?.description ?? '');
+  const [defaultPoints, setDefaultPoints] = useState(initial?.default_points ?? '0');
   const [error, setError] = useState(''); const [pending, setPending] = useState(false); const [latest, setLatest] = useState(book); const [conflict, setConflict] = useState(false); const [reloaded, setReloaded] = useState(false);
-  useEffect(() => { onDirty(name !== (initial?.name ?? '') || description !== (initial?.description ?? '') || kind !== category || date !== initialDate); }, [name, description, kind, date, initial, initialDate, category, onDirty]);
+  useEffect(() => { onDirty(name !== (initial?.name ?? '') || description !== (initial?.description ?? '') || kind !== category || date !== initialDate || defaultPoints !== (initial?.default_points ?? '0')); }, [name, description, kind, date, defaultPoints, initial, initialDate, category, onDirty]);
   async function submit() {
-    if (!name.trim() || !date || conflict || latest.readonly) return;
+    if (!name.trim() || !date || !defaultPoints.trim() || !validDecimal(defaultPoints) || conflict || latest.readonly) return;
     setPending(true); setError('');
     try {
-      const input = { expected_version: latest.version, name: name.trim(), occurred_on: date, description };
+      const input = { expected_version: latest.version, name: name.trim(), occurred_on: date, description, default_points: defaultPoints.trim() || null };
       const updated = initial ? await api.scores.updateItem(book.class_group.id, initial.id, input) : await api.scores.createItem(book.class_group.id, { ...input, category: kind });
       const itemId = initial?.id ?? updated.items.find((row) => !latest.items.some((old) => old.id === row.id))?.id ?? '';
       done(updated, itemId);
@@ -32,6 +33,7 @@ export function ScoreItemDialog({ book, initial, category, close, done, onDirty 
       <label className="field"><span>所属类别</span><select disabled={Boolean(initial) || pending} value={kind} onChange={(event) => setKind(event.target.value as ScoreCategory)}>{categories.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>
       <label className="field"><span>项目名称</span><input required maxLength={120} disabled={pending} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：实验 1 · 环境搭建" /></label>
       <label className="field"><span>项目日期</span><input required type="date" disabled={pending} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+      <label className="field"><span>项目默认积分</span><input aria-label="项目默认积分" required type="number" step="0.0001" disabled={pending} value={defaultPoints} onChange={(event) => setDefaultPoints(event.target.value)} /><small>仅用于新建项目时初始化学生分值，之后修改不会覆盖已保存的学生分值。</small></label>
       <label className="field"><span>项目说明</span><textarea rows={3} maxLength={500} disabled={pending} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
       {error && <div className="form-alert" role="alert">{error}{conflict && <><button type="button" className="btn btn-secondary" disabled={pending} onClick={() => void reload()}>刷新并核对</button>{reloaded && <><p>最新项目：{serverItem ? `${serverItem.name} · ${serverItem.occurred_on} · ${serverItem.description || '无说明'}` : '项目尚未创建'}{latest.readonly ? '；班级已归档，只读' : ''}</p><button type="button" className="btn btn-secondary" onClick={() => { setConflict(false); setError(''); }}>确认核对，继续保存</button></>}</>}</div>}
     </form>
@@ -40,7 +42,7 @@ export function ScoreItemDialog({ book, initial, category, close, done, onDirty 
 
 function historyValue(value: Record<string, unknown> | null, book: ScoreBook) {
   if (!value) return '无记录';
-  const labels: Record<string, string> = { points: '积分', note: '备注', name: '项目名称', category: '类别', occurred_on: '日期', description: '说明', base_score: '基础分', factors: '系数', item_id: '项目', enrollment_id: '名单成员' };
+  const labels: Record<string, string> = { points: '积分', note: '备注', name: '项目名称', category: '类别', occurred_on: '日期', description: '说明', default_points: '项目默认积分', base_score: '基础分', factors: '系数', item_id: '项目', enrollment_id: '名单成员' };
   return Object.entries(value).filter(([key]) => key in labels).map(([key, data]) => {
     const shown = key === 'item_id' ? book.items.find((item) => item.id === data)?.name ?? data : key === 'category' ? categories.find((item) => item.key === data)?.label ?? data : data;
     return `${labels[key]}：${shown === null ? '尚未评价' : typeof shown === 'object' ? JSON.stringify(shown) : String(shown ?? '')}`;

@@ -36,6 +36,7 @@ class CreateScoreItemRequest(ApiModel):
     name: str = Field(min_length=1, max_length=120)
     occurred_on: date
     description: str = Field(default="", max_length=500)
+    default_points: ScoreDecimal | None = None
 
     @field_validator("name")
     @classmethod
@@ -51,6 +52,7 @@ class UpdateScoreItemRequest(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     occurred_on: date | None = None
     description: str | None = Field(default=None, max_length=500)
+    default_points: ScoreDecimal | None = None
 
     @field_validator("name")
     @classmethod
@@ -91,6 +93,7 @@ class ScoreItem(ApiModel):
     name: str
     occurred_on: date
     description: str
+    default_points: ScoreDecimal | None
 
 
 class ScoreStudent(ApiModel):

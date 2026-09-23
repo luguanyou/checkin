@@ -147,7 +147,7 @@ def get_book(db: Session, *, teacher_id: str, class_group_id: str) -> schema.Sco
             record = record_lookup.get((enrollment.id, item.id))
             # Removed members retain only existing rows; future projects never affect them.
             if enrollment.status == "ACTIVE" or record is not None:
-                values[item.category].append(record.points if record else None)
+                values[item.category].append(record.points if record else item.default_points)
         summaries.append(calculate_summary(enrollment.id, rules, values))
     return schema.ScoreBook(
         class_group=schema.ScoreScope.model_validate(class_group),
@@ -255,6 +255,7 @@ def mutate_book(
                 name=payload.name,
                 occurred_on=payload.occurred_on,
                 description=payload.description,
+                default_points=payload.default_points,
             )
             db.add(created_item)
             db.flush()
@@ -266,7 +267,10 @@ def mutate_book(
             db.add_all(
                 [
                     ScoreRecord(
-                        item_id=created_item.id, enrollment_id=enrollment_id, points=None, note=""
+                        item_id=created_item.id,
+                        enrollment_id=enrollment_id,
+                        points=payload.default_points,
+                        note="",
                     )
                     for enrollment_id in enrollment_ids
                 ]
