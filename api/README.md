@@ -47,6 +47,26 @@ uv run uvicorn attendance_api.main:app --host 127.0.0.1 --port 8000
 
 OpenAPI 文档地址：`http://127.0.0.1:8000/docs`，原始契约地址：`http://127.0.0.1:8000/openapi.json`。
 
+## 平时成绩模块与升级
+
+已有环境启用本模块前，确认 `.env` 指向目标数据库，在本目录执行 `uv run alembic upgrade head`，再重启 API 并更新前端构建。新增迁移 `0004_add_scores` 创建成绩规则、评分项目及学生积分表，不修改考勤记录。
+
+教师通过 `/api/v1/classes/{class_group_id}/scores` 管理自己班级的成绩：
+
+| 方法与相对路径 | 用途 |
+| --- | --- |
+| `GET /` | 获取班级规则、项目、积分及服务端汇总 |
+| `PUT /settings` | 保存基础分和四类积分换算系数 |
+| `POST /items` | 新建评分项目 |
+| `PATCH /items/{item_id}` | 修改项目名称、日期和说明 |
+| `PUT /items/{item_id}/records` | 批量保存学生积分与备注 |
+| `GET /history` | 查询变更历史，可按 `enrollment_id` 筛选 |
+| `GET /export?format=csv&kind=summary` | 导出；格式支持 `csv`、`xlsx`，类型支持 `summary`、`details` |
+
+基础分默认 70，可按班级修改或暂时留空。每类净积分乘以该类别系数后加上基础分，仅最终平时成绩限制在 0～100 分；考勤不参与计算。积分及规则支持最多四位小数，API 的小数输出为字符串，正式分数保留两位小数。空积分表示未评价，零积分表示已评价。
+
+所有写入携带读取成绩簿时的 `expected_version`。版本过期返回 `409 SCORE_VERSION_CONFLICT`，客户端必须核对最新数据后重试。已移除学生的历史成绩和已归档班级只读，可查看与导出。完整字段及错误响应见 OpenAPI；教师操作步骤见 [用户指南](../docs/admin-teacher-user-guide.md#415-记录平时表现积分)。
+
 ## 验证
 
 ```powershell

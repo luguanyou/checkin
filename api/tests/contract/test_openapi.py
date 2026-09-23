@@ -29,6 +29,14 @@ EXPECTED_OPERATION_IDS = {
     "updateAttendanceRecord",
     "completeAttendanceSession",
     "exportAttendanceSession",
+    "speakText",
+    "getScoreBook",
+    "setScoreSettings",
+    "createScoreItem",
+    "updateScoreItem",
+    "setScoreRecords",
+    "getScoreHistory",
+    "exportScores",
 }
 
 

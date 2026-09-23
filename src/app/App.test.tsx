@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -114,7 +114,7 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: '教师账号' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/admin');
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(5));
   });
 
   it('redirects a teacher away from the administrator page', async () => {
@@ -147,5 +147,19 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: '登录课点' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/login');
+  });
+
+  it('allows teachers to open scores and keeps administrators out of the teacher module', async () => {
+    window.history.replaceState({}, '', '/scores');
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/auth/refresh') ? sessionResponse('TEACHER') : emptyPageResponse());
+    vi.stubGlobal('fetch', fetcher);
+    const view = render(<App />);
+    expect(await screen.findByRole('heading', { name: '平时成绩' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '还没有可用班级' })).toBeInTheDocument();
+    view.unmount(); queryClient.clear();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/auth/refresh') ? sessionResponse('ADMIN') : emptyPageResponse()));
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: '教师账号' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/admin');
   });
 });

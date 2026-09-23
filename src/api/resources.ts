@@ -18,6 +18,7 @@ import type {
   UserStatus,
 } from './types';
 import { ApiClient } from './client';
+import type { ScoreBook, ScoreHistory, ScoreItemInput, ScoreRecordInput, ScoreSettings } from './scores-types';
 
 function queryString(values: Record<string, string | number | undefined>) {
   const params = new URLSearchParams();
@@ -34,6 +35,15 @@ function json(method: string, body?: unknown): RequestInit {
 
 export function createApi(client: ApiClient) {
   return {
+    scores: {
+      get: (classId: string) => client.request<ScoreBook>(`/classes/${classId}/scores`),
+      saveSettings: (classId: string, input: ScoreSettings & { expected_version: number }) => client.request<ScoreBook>(`/classes/${classId}/scores/settings`, json('PUT', input)),
+      createItem: (classId: string, input: ScoreItemInput & { expected_version: number }) => client.request<ScoreBook>(`/classes/${classId}/scores/items`, json('POST', input)),
+      updateItem: (classId: string, itemId: string, input: Omit<ScoreItemInput, 'category'> & { expected_version: number }) => client.request<ScoreBook>(`/classes/${classId}/scores/items/${itemId}`, json('PATCH', input)),
+      saveRecords: (classId: string, itemId: string, input: { expected_version: number; records: ScoreRecordInput[] }) => client.request<ScoreBook>(`/classes/${classId}/scores/items/${itemId}/records`, json('PUT', input)),
+      history: (classId: string, enrollmentId?: string) => client.request<{ items: ScoreHistory[] }>(`/classes/${classId}/scores/history${queryString({ enrollment_id: enrollmentId })}`),
+      export: (classId: string, format: 'csv' | 'xlsx', kind: 'summary' | 'details') => client.download(`/classes/${classId}/scores/export${queryString({ format, kind })}`),
+    },
     auth: {
       login: (username: string, password: string) => client.request<LoginResponse>('/auth/login', json('POST', { username, password }), false),
       refresh: () => client.request<LoginResponse>('/auth/refresh', { method: 'POST' }, false),

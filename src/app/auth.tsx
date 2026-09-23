@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiClient } from '../api/client';
 import { createApi, type AttendanceApi } from '../api/resources';
-import type { User } from '../api/types';
+import type { LoginResponse, User } from '../api/types';
 
 type AuthStatus = 'restoring' | 'anonymous' | 'authenticated';
 interface AuthContextValue {
@@ -21,10 +21,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session?.user ?? null); setStatus(session ? 'authenticated' : 'anonymous');
   }}));
   const api = useMemo(() => createApi(client), [client]);
+  const restoration = useRef<Promise<LoginResponse> | null>(null);
 
   useEffect(() => {
     let active = true;
-    api.auth.refresh().then((session) => {
+    // Refresh tokens rotate after use. Replayed mount effects must share one request.
+    restoration.current ??= api.auth.refresh();
+    restoration.current.then((session) => {
       if (!active) return;
       client.setAccessToken(session.access_token); setUser(session.user); setStatus('authenticated');
     }).catch(() => {

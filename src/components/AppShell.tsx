@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardCheck, LayoutDashboard, LogOut, UsersRound } from 'lucide-react';
+import { BookOpen, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut, UsersRound } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../app/auth';
 
@@ -7,6 +7,7 @@ const links = [
   { to: '/courses', label: '课程班级', icon: BookOpen },
   { to: '/classes/current/roster', label: '学生名单', icon: UsersRound },
   { to: '/records', label: '考勤记录', icon: ClipboardCheck },
+  { to: '/scores', label: '平时成绩', icon: GraduationCap },
 ];
 export function AppShell() {
   const { user, logout } = useAuth();

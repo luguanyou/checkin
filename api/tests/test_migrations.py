@@ -15,6 +15,9 @@ EXPECTED_TABLES = {
     "attendance_records",
     "audit_logs",
     "alembic_version",
+    "score_settings",
+    "score_items",
+    "score_records",
 }
 
 

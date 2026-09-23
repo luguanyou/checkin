@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { chromium } = require('playwright-core');
+const { createScoreFixture, handleScoreRequest } = require('./scores-browser-fixture.cjs');
 
 const root = path.join(__dirname, '..');
 const baseUrl = 'http://127.0.0.1:4173';
@@ -34,7 +35,7 @@ function createFixtures(role = 'TEACHER') {
     return counts;
   }
   summary();
-  return { user, teachers, courses, roster, records, session, requests, summary, get authenticated() { return authenticated; }, login() { authenticated = true; }, logout() { authenticated = false; } };
+  return { user, teachers, courses, roster, records, session, requests, summary, scores: createScoreFixture(courses[0], roster), get authenticated() { return authenticated; }, login() { authenticated = true; }, logout() { authenticated = false; } };
 }
 
 async function installApi(page, data) {
@@ -43,6 +44,7 @@ async function installApi(page, data) {
     data.requests.push(`${method} ${endpoint}`);
     const json = (body, status = 200, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body) });
     const error = (code, message, status = 400) => json({ code, message, details: {}, request_id: 'browser-request' }, status);
+    if (await handleScoreRequest({ route, endpoint, method, url, book: data.scores, json, error })) return;
     if (endpoint === '/api/v1/auth/refresh') return data.authenticated ? json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }) : error('AUTHENTICATION_REQUIRED', '请先登录', 401);
     if (endpoint === '/api/v1/auth/login' && method === 'POST') { data.login(); return json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }); }
     if (endpoint === '/api/v1/auth/logout') { data.logout(); return route.fulfill({ status: 204 }); }
@@ -143,6 +145,46 @@ async function run() {
     await page.getByRole('button', { name: '修正' }).last().click(); await page.getByLabel('修正原因').fill('学生课间到场补签'); await page.getByRole('combobox', { name: '考勤状态' }).selectOption('late'); await page.getByRole('button', { name: '确认修正' }).click(); await page.getByText('考勤状态已修正').waitFor();
     await page.getByRole('button', { name: '导出记录' }).click(); const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: '生成文件' }).click(); const download = await downloadPromise; assert.equal(download.suggestedFilename(), 'attendance.xlsx');
 
+    await page.getByRole('link', { name: '平时成绩', exact: true }).first().click();
+    await page.getByRole('heading', { name: '平时成绩', exact: true }).waitFor();
+    await page.getByRole('button', { name: '新建项目', exact: true }).click();
+    await page.getByLabel('项目名称').fill('作业 1 · 需求分析');
+    await page.getByLabel('所属类别').selectOption('HOMEWORK');
+    await page.getByLabel('项目日期').fill('2026-09-22');
+    await page.getByRole('button', { name: '创建项目', exact: true }).click();
+    await page.getByLabel('张敏本次积分').waitFor();
+    await page.getByLabel('张敏本次积分').fill('0.5');
+    await page.getByLabel('张敏备注').fill('部分完成，已反馈');
+    await page.getByLabel('李明本次积分').fill('0');
+    const recordsResponse = page.waitForResponse((response) => response.url().endsWith('/scores/items/score-item-1/records') && response.status() === 200);
+    await page.getByRole('button', { name: '保存本次录入', exact: true }).click();
+    await recordsResponse;
+    assert.equal(fixtures.scores.records.find((record) => record.enrollment_id === 'e1').points, '0.5');
+    assert.equal(fixtures.scores.records.find((record) => record.enrollment_id === 'e2').points, '0');
+    await page.getByRole('button', { name: '基础分与换算', exact: true }).click();
+    await page.getByLabel('基础分', { exact: true }).fill('80');
+    for (const label of ['作业', '课堂表现', '上机实验表现', '其他']) {
+      await page.getByLabel(`${label}每积分分值`, { exact: true }).fill(label === '作业' ? '0.5' : '1');
+    }
+    const settingsResponse = page.waitForResponse((response) => response.url().endsWith('/scores/settings') && response.status() === 200);
+    await page.getByRole('button', { name: '保存换算规则', exact: true }).click();
+    await settingsResponse;
+    assert.equal(fixtures.scores.settings.base_score, '80');
+    await page.getByRole('button', { name: '平时成绩汇总', exact: true }).click();
+    await page.getByRole('button', { name: '导出正式汇总', exact: true }).click();
+    await page.getByLabel('CSV 文本 (.csv)', { exact: true }).check();
+    const scoresDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: '生成文件', exact: true }).click();
+    assert.equal((await scoresDownload).suggestedFilename(), 'scores.csv');
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const tab of ['项目积分录入', '基础分与换算', '平时成绩汇总']) {
+        await page.getByRole('button', { name: tab, exact: true }).click();
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `scores ${tab} at ${width}px overflow`);
+      }
+      if (width !== 320) await page.screenshot({ path: path.join(root, '.superpowers', `scores-${width}.png`), fullPage: true });
+    }
+
     for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }, { name: 'small', width: 320, height: 740 }]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height }); await page.goto(`${baseUrl}/`); await page.getByRole('heading', { name: '工作台' }).waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${viewport.name} overflow`);
@@ -150,7 +192,7 @@ async function run() {
     }
     const unnamed = await page.locator('button:visible').evaluateAll((items) => items.filter((item) => !(item.getAttribute('aria-label') || item.textContent.trim())).length);
     assert.equal(unnamed, 0, 'all visible buttons need an accessible name'); assert.deepEqual(errors, []);
-    console.log('React browser checks passed: admin routing/logout, teacher workflows, accessibility, and responsive overflow.');
+    console.log('React browser checks passed: admin routing/logout, teacher attendance and scores workflows, accessibility, and responsive overflow.');
   } finally {
     if (browser) await browser.close(); vite.kill();
   }

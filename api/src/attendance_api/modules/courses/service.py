@@ -12,6 +12,9 @@ from attendance_api.models import (
     Course,
     Enrollment,
     ImportPreview,
+    ScoreItem,
+    ScoreRecord,
+    ScoreSettings,
     User,
 )
 from attendance_api.modules.audit.service import append_audit
@@ -363,10 +366,42 @@ def delete_class_group(
         )
         or 0
     )
-    if (enrollment_count or session_count or preview_count) and not delete_related_data:
-        raise _resource_state_error("班级存在名单或考勤数据，无法删除")
+    score_item_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(ScoreItem)
+            .where(ScoreItem.class_group_id == class_group.id)
+        )
+        or 0
+    )
+    score_settings_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(ScoreSettings)
+            .where(ScoreSettings.class_group_id == class_group.id)
+        )
+        or 0
+    )
+    score_ids = select(ScoreItem.id).where(ScoreItem.class_group_id == class_group.id)
+    score_record_count = (
+        db.scalar(
+            select(func.count()).select_from(ScoreRecord).where(ScoreRecord.item_id.in_(score_ids))
+        )
+        or 0
+    )
+    if (
+        enrollment_count
+        or session_count
+        or preview_count
+        or score_item_count
+        or score_settings_count
+    ) and not delete_related_data:
+        raise _resource_state_error("班级存在名单、考勤或平时成绩数据，无法删除")
     record_count = 0
     if delete_related_data:
+        db.execute(delete(ScoreRecord).where(ScoreRecord.item_id.in_(score_ids)))
+        db.execute(delete(ScoreItem).where(ScoreItem.class_group_id == class_group.id))
+        db.execute(delete(ScoreSettings).where(ScoreSettings.class_group_id == class_group.id))
         session_ids = select(AttendanceSession.id).where(
             AttendanceSession.class_group_id == class_group.id
         )
@@ -399,6 +434,9 @@ def delete_class_group(
                 "attendance_sessions": session_count,
                 "import_previews": preview_count,
                 "enrollments": enrollment_count,
+                "score_records": score_record_count,
+                "score_items": score_item_count,
+                "score_settings": score_settings_count,
             },
         },
         after_value=None,
