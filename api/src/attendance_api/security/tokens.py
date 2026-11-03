@@ -64,7 +64,7 @@ def decode_access_token(token: str) -> AccessClaims:
         raise InvalidAccessTokenError
     if not isinstance(payload["sub"], str) or not isinstance(payload["sid"], str):
         raise InvalidAccessTokenError
-    if payload["role"] not in {"ADMIN", "TEACHER"}:
+    if payload["role"] not in {"ADMIN", "TEACHER", "STUDENT"}:
         raise InvalidAccessTokenError
     if not isinstance(payload["must_change_password"], bool):
         raise InvalidAccessTokenError

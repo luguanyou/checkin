@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'TEACHER';
+export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
 export type UserStatus = 'ACTIVE' | 'DISABLED';
 export type ResourceStatus = 'ACTIVE' | 'ARCHIVED';
 export type EnrollmentStatus = 'ACTIVE' | 'REMOVED';

@@ -115,3 +115,42 @@ describe('business pages', () => {
     expect(api.roster.list).toHaveBeenCalledWith('class-1', expect.objectContaining({ page: 1 }));
   });
 });
+
+it('adds a student through the roster dialog and keeps errors editable', async () => {
+  const user = userEvent.setup();
+  const create = vi.fn().mockRejectedValueOnce(new Error('该学生已在当前班级名单中')).mockResolvedValue({});
+  Object.assign(api.roster, { create });
+  api.courses.list.mockResolvedValue(page);
+  api.roster.list.mockResolvedValue({ items: [], page: 1, page_size: 20, total: 0 });
+  render(wrapper(<Routes><Route path="/classes/:classId/roster" element={<RosterPage />} /></Routes>, '/classes/class-1/roster'));
+  await user.click(await screen.findByRole('button', { name: '新增学生' }));
+  await user.type(screen.getByLabelText('学号'), '0099');
+  await user.type(screen.getByLabelText('姓名'), '新同学');
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('该学生已在当前班级名单中');
+  expect(screen.getByLabelText('学号')).toHaveValue('0099');
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(create).toHaveBeenCalledWith('class-1', { student_number: '0099', name: '新同学', gender: undefined, major: undefined });
+});
+
+it('edits an existing roster member and keeps values after a failed save', async () => {
+  const user = userEvent.setup();
+  const member = { enrollment_id: 'e1', enrollment_status: 'ACTIVE', student: { id: 's1', student_number: '001', name: '原姓名', gender: '女', major: '原专业' } };
+  const update = vi.fn().mockRejectedValueOnce(new Error('该学号已存在')).mockResolvedValue({ ...member, student: { ...member.student, name: '新姓名', major: null } });
+  Object.assign(api.roster, { update });
+  api.courses.list.mockResolvedValue(page);
+  api.roster.list.mockResolvedValue({ items: [member], page: 1, page_size: 20, total: 1 });
+  render(wrapper(<Routes><Route path="/classes/:classId/roster" element={<RosterPage />} /></Routes>, '/classes/class-1/roster'));
+  await user.click(await screen.findByRole('button', { name: '编辑原姓名' }));
+  expect(screen.getByLabelText('学号')).toHaveValue('001');
+  expect(screen.getByLabelText('姓名')).toHaveValue('原姓名');
+  await user.clear(screen.getByLabelText('姓名')); await user.type(screen.getByLabelText('姓名'), '新姓名');
+  await user.clear(screen.getByLabelText('专业'));
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('该学号已存在');
+  expect(screen.getByLabelText('姓名')).toHaveValue('新姓名');
+  await user.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(update).toHaveBeenCalledWith('class-1', 'e1', { student_number: '001', name: '新姓名', gender: '女', major: undefined });
+});

@@ -7,7 +7,8 @@ import { EmptyState } from '../../components/AsyncState';
 import { useToast } from '../../components/ToastProvider';
 import { ScoreItemDialog, ScoreHistoryDialog } from './ScoreDialogs';
 import { ScoreSummaryView } from './ScoreSummaryView';
-import { categories, decimal, displayPoints, validDecimal } from './score-utils';
+import { categories, decimal, displayPoints, roundPoints, validDecimal } from './score-utils';
+import { ScorePointInput } from './ScorePointInput';
 import { discardMessage } from './useUnsavedScores';
 
 type RowDraft = { points: string; note: string };
@@ -51,9 +52,9 @@ export function ScoreEditor({ book, onBook, onDirty }: { book: ScoreBook; onBook
   }
   async function saveRows() {
     if (!item || conflict || book.readonly) return;
-    if (Object.values(drafts).some((row) => !validDecimal(row.points))) { setError('请输入有效积分，最多保留四位小数。'); return; }
+    if (Object.values(drafts).some((row) => !validDecimal(row.points))) { setError('请输入有效积分，保存时保留一位小数。'); return; }
     if (Object.keys(drafts).some((id) => book.students.find((student) => student.enrollment_id === id)?.enrollment_status !== 'ACTIVE')) { setError('草稿中有已移除学生，历史积分只读。请放弃本次草稿后重新录入在班学生。'); return; }
-    const records = Object.entries(drafts).map(([enrollment_id, row]) => ({ enrollment_id, points: decimal(row.points), note: row.note }));
+    const records = Object.entries(drafts).map(([enrollment_id, row]) => ({ enrollment_id, points: row.points.trim() === '' ? null : roundPoints(row.points), note: row.note }));
     setPending(true); setError('');
     try { const updated = await api.scores.saveRecords(book.class_group.id, item.id, { expected_version: recordVersion, records }); onBook(updated); setSettingsDraft(null); setDrafts({}); toast.show('本次积分已保存'); }
     catch (reason) { failed(reason); } finally { setPending(false); }
@@ -80,12 +81,12 @@ export function ScoreEditor({ book, onBook, onDirty }: { book: ScoreBook; onBook
       <div className="scores-project-bar"><label className="field"><span>当前项目</span><select value={item?.id ?? ''} disabled={pending || !items.length} onChange={(e) => switchView(() => setSelectedItemId(e.target.value))}>{!items.length && <option value="">暂无项目</option>}{items.map((row) => <option value={row.id} key={row.id}>{row.name} · {row.occurred_on}</option>)}</select></label><div className="actions"><button className="btn btn-secondary" disabled={locked || conflict || !item} onClick={() => switchView(() => setItemDialog(item!))}><Pencil />编辑项目</button><button className="btn btn-primary" disabled={locked || conflict} onClick={() => switchView(() => setItemDialog('new'))}><Plus />新建项目</button></div></div>
       {!item ? <EmptyState title="该类别还没有评分项目" description="创建作业、实验或表现事件项目，即可先记录积分，稍后设置换算规则。" /> : <>
         {item.description && <p className="form-note">{item.description}</p>}
-        <p className="form-note">快捷评分为 1、2、3、4、5；也可输入自定义正负小数。待评价项目默认按 0 分计入汇总，仍保留待评价状态。</p>
-        {!visibleStudents.length ? <EmptyState title={students.length ? '没有匹配的学生' : '还没有学生'} description={students.length ? '调整学号或姓名搜索条件。' : '请先在学生名单中导入本班学生。'} /> : <form onSubmit={(event) => { event.preventDefault(); void saveRows(); }}>
+        <p className="form-note">快捷评分为 1、2、3、4、5；也可输入正负小数，离开输入框时保留一位小数，上下键每次增减 1。待评价项目默认按 0 分计入汇总，仍保留待评价状态。</p>
+        {!visibleStudents.length ? <EmptyState title={students.length ? '没有匹配的学生' : '还没有学生'} description={students.length ? '调整学号或姓名搜索条件。' : '请先在学生名单中导入本班学生。'} /> : <form noValidate onSubmit={(event) => { event.preventDefault(); void saveRows(); }}>
           <div className="panel table-scroll"><table className="scores-entry-table"><thead><tr><th>学生</th><th>本次积分</th><th>快捷评价</th><th>备注</th><th>类别累计（已保存）</th><th>状态 / 历史</th></tr></thead><tbody>{visibleStudents.map((student) => {
             const source = original(student.enrollment_id); const row = drafts[student.enrollment_id] ?? source; const removed = student.enrollment_status === 'REMOVED'; const disabled = locked || removed;
             const total = book.summaries.find((summary) => summary.enrollment_id === student.enrollment_id)?.categories.find((group) => group.category === category)?.points;
-            return <tr key={student.enrollment_id}><td><strong>{student.student_name}</strong><small>{student.student_number}{removed ? ' · 已移除' : ''}</small></td><td><input className="scores-point" type="number" step="0.0001" aria-label={`${student.student_name}本次积分`} disabled={disabled} value={row.points === '' ? '0' : row.points} placeholder="0" onChange={(event) => updateRow(student.enrollment_id, { points: event.target.value })} />{reloaded && drafts[student.enrollment_id] && <small>最新：{source.points || '0'}</small>}</td><td><div className="scores-quick">{['1', '2', '3', '4', '5'].map((point) => <button type="button" className={`btn btn-secondary btn-sm ${Number(row.points === '' ? '0' : row.points) === Number(point) ? 'chosen' : ''}`} key={point} disabled={disabled} onClick={() => updateRow(student.enrollment_id, { points: point })}>{point}</button>)}</div></td><td><input className="scores-note" aria-label={`${student.student_name}备注`} maxLength={500} disabled={disabled} value={row.note} placeholder="选填" onChange={(event) => updateRow(student.enrollment_id, { note: event.target.value })} />{reloaded && drafts[student.enrollment_id] && <small>最新备注：{source.note || '无'}</small>}</td><td className="mono">{displayPoints(total)}</td><td><small>{removed ? '历史记录 · 只读' : drafts[student.enrollment_id] ? '未保存' : row.points === '' ? '尚未评价' : '已评价'}</small><button type="button" className="btn btn-ghost btn-sm" onClick={() => setHistory(student)}>变更历史</button></td></tr>;
+            return <tr key={student.enrollment_id}><td><strong>{student.student_name}</strong><small>{student.student_number}{removed ? ' · 已移除' : ''}</small></td><td><ScorePointInput label={`${student.student_name}本次积分`} disabled={disabled} value={row.points} onChange={(points) => updateRow(student.enrollment_id, { points })} />{reloaded && drafts[student.enrollment_id] && <small>最新：{source.points || '0'}</small>}</td><td><div className="scores-quick">{['1', '2', '3', '4', '5'].map((point) => <button type="button" className={`btn btn-secondary btn-sm ${Number(row.points === '' ? '0' : row.points) === Number(point) ? 'chosen' : ''}`} key={point} disabled={disabled} onClick={() => updateRow(student.enrollment_id, { points: point })}>{point}</button>)}</div></td><td><input className="scores-note" aria-label={`${student.student_name}备注`} maxLength={500} disabled={disabled} value={row.note} placeholder="选填" onChange={(event) => updateRow(student.enrollment_id, { note: event.target.value })} />{reloaded && drafts[student.enrollment_id] && <small>最新备注：{source.note || '无'}</small>}</td><td className="mono">{displayPoints(total)}</td><td><small>{removed ? '历史记录 · 只读' : drafts[student.enrollment_id] ? '未保存' : row.points === '' ? '尚未评价' : '已评价'}</small><button type="button" className="btn btn-ghost btn-sm" onClick={() => setHistory(student)}>变更历史</button></td></tr>;
           })}</tbody></table></div>
           <div className="scores-footer"><p>同一项目重复录入为修改，不重复累计。{Object.keys(drafts).length ? ` ${Object.keys(drafts).length} 名学生待保存。` : ''}</p><button className="btn btn-primary" disabled={locked || conflict || !Object.keys(drafts).length}><Save />{pending ? '正在保存...' : '保存本次录入'}</button></div>
         </form>}

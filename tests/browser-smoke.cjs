@@ -45,6 +45,42 @@ async function installApi(page, data) {
     const json = (body, status = 200, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body) });
     const error = (code, message, status = 400) => json({ code, message, details: {}, request_id: 'browser-request' }, status);
     if (await handleScoreRequest({ route, endpoint, method, url, book: data.scores, json, error })) return;
+    data.registrations ??= [];
+    if (endpoint === '/api/v1/auth/student-registration/classes') return json({ items: [{ id: 'class-1', name: '一班', course_name: '设计', term: '2026' }] });
+    if (endpoint === '/api/v1/auth/student-register') {
+      const input = request.postDataJSON();
+      data.registrations.push({ id: 'registration-1', name: input.name, student_number: input.student_number, status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true });
+      return json({ status: 'PENDING', message: '申请已提交' }, 201);
+    }
+    if (endpoint === '/api/v1/classes/class-1/registrations') return json({ items: data.registrations.filter((item) => url.searchParams.get('status') === 'all' || item.status === (url.searchParams.get('status') || 'PENDING')) });
+    if (endpoint === '/api/v1/classes/class-1/registrations/review' && method === 'POST') {
+      const input = request.postDataJSON();
+      for (const item of data.registrations.filter((row) => input.registration_ids.includes(row.id))) { item.status = input.decision; item.can_review = false; item.reviewer_name = data.user.display_name; item.reason = input.reason; }
+      return json({ reviewed: input.registration_ids.length });
+    }
+    data.monitorGrants ??= [];
+    const monitorItem = { id: 'mi1', name: '班长登记项目', category: 'HOMEWORK', occurred_on: '2026-11-02', description: '', default_points: null };
+    const monitorManagement = () => ({ readonly: false, items: [monitorItem], members: [{ student: { id: 's1', student_number: '001', name: '班长' }, enrollment_status: 'ACTIVE', user_id: 'monitor-user', username: '001', account_status: 'ACTIVE', item_ids: data.monitorGrants, can_review_registrations: Boolean(data.canReview) }] });
+    if (endpoint === '/api/v1/classes/class-1/monitors') return json(monitorManagement());
+    if (endpoint === '/api/v1/classes/class-1/monitors/monitor-user' && method === 'PUT') { data.monitorGrants = request.postDataJSON().item_ids; data.canReview = Boolean(request.postDataJSON().can_review_registrations); return json(monitorManagement()); }
+    if (endpoint === '/api/v1/student/monitor-projects') return json({ items: data.monitorGrants.length ? [{ ...monitorItem, class_id: 'class-1', class_name: '一班', course_name: '设计' }] : [] });
+    if (endpoint.startsWith('/api/v1/student/classes/class-1/monitor-projects/')) {
+      if (method === 'PUT') data.monitorRecord = { ...request.postDataJSON().records[0], id: 'mr1', item_id: 'mi1', updated_at: '' };
+      return json({ version: data.monitorRecord ? 1 : 0, item: monitorItem, students: [
+        { enrollment_id: 'me1', student_id: 's1', student_number: '001', student_name: '班长本人', enrollment_status: 'ACTIVE', can_edit: false },
+        { enrollment_id: 'me2', student_id: 's2', student_number: '002', student_name: '被登记同学', enrollment_status: 'ACTIVE', can_edit: true },
+      ], records: data.monitorRecord ? [data.monitorRecord] : [] });
+    }
+    data.visibility ??= { attendance_visible: false, score_visibility: 'HIDDEN' };
+    if (endpoint === '/api/v1/classes/class-1/student-visibility') {
+      if (method === 'PUT') data.visibility = request.postDataJSON();
+      return json(data.visibility);
+    }
+    if (endpoint === '/api/v1/student/classes') return json({ items: [{ id: 'class-1', name: '一班', course_name: '设计', term: '2026', can_record_scores: data.monitorGrants.length > 0, can_review_registrations: Boolean(data.canReview), ...data.visibility }] });
+    if (endpoint === '/api/v1/student/classes/class-1') return json({ ...data.visibility,
+      attendance: data.visibility.attendance_visible ? [{ id: 'a1', date: '2026-11-02', status: 'present', session_status: 'COMPLETED' }] : null,
+      score: data.visibility.score_visibility === 'HIDDEN' ? null : { final_score: '75.2', status: 'READY' }, details: null,
+    });
     if (endpoint === '/api/v1/auth/refresh') return data.authenticated ? json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }) : error('AUTHENTICATION_REQUIRED', '请先登录', 401);
     if (endpoint === '/api/v1/auth/login' && method === 'POST') { data.login(); return json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }); }
     if (endpoint === '/api/v1/auth/logout') { data.logout(); return route.fulfill({ status: 204 }); }
@@ -63,6 +99,13 @@ async function installApi(page, data) {
     if (endpoint === '/api/v1/courses' && method === 'GET') return json({ items: data.courses, page: 1, page_size: 100, total: data.courses.length });
     if (endpoint === '/api/v1/courses' && method === 'POST') { const body = request.postDataJSON(); const course = { id: 'course-2', ...body, status: 'ACTIVE', classes: [], created_at: '', updated_at: '' }; data.courses.push(course); return json(course, 201); }
     if (/\/api\/v1\/courses\/[^/]+\/classes$/.test(endpoint) && method === 'POST') { const body = request.postDataJSON(); const item = { id: 'class-2', name: body.name, status: 'ACTIVE', active_student_count: 0 }; data.courses[1].classes.push(item); return json(item, 201); }
+    if (/^\/api\/v1\/classes\/class-1\/roster\/[^/]+$/.test(endpoint) && method === 'PUT') {
+      const member = data.roster.find((row) => row.enrollment_id === endpoint.split('/').pop());
+      if (!member) return error('RESOURCE_NOT_FOUND', '名单成员不存在', 404);
+      const input = request.postDataJSON();
+      member.student = { ...member.student, ...input, gender: input.gender || null, major: input.major || null };
+      return json(member);
+    }
     if (endpoint === '/api/v1/classes/class-1/roster' && method === 'GET') return json({ items: data.roster, page: 1, page_size: 20, total: data.roster.length });
     if (endpoint === '/api/v1/classes/class-1/roster/import-preview' && method === 'POST') return json({ preview_id: 'preview-1', expires_at: '2026-09-03T02:00:00Z', summary: { total: 2, valid: 2, errors: 0, duplicates: 0, importable: 2 }, rows: [{ row_number: 2, student_number: '20260001', name: '张敏', gender: '女', class_name: '2024 级 2 班', major: '工业设计', status: 'valid', code: null, fields: [], message: null }] }, 201);
     if (endpoint === '/api/v1/classes/class-1/roster/import-confirm' && method === 'POST') return json({ preview_id: 'preview-1', created_students: 0, created_enrollments: 0, restored_enrollments: 0, skipped: 2, failed: 0 });
@@ -89,6 +132,63 @@ async function run() {
       candidate.on('response', (response) => { if (response.status() >= 400 && !response.url().endsWith('/api/v1/auth/refresh')) errors.push(`${response.status()} ${response.url()}`); });
       candidate.on('pageerror', (error) => errors.push(error.message));
     };
+
+    const signupPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    watchPage(signupPage);
+    const signupData = createFixtures('STUDENT'); signupData.registrations = [];
+    await installApi(signupPage, signupData); await signupPage.goto(`${baseUrl}/register`);
+    await signupPage.getByRole('heading', { name: '学生注册' }).waitFor();
+    await signupPage.getByLabel('学号', { exact: true }).fill('009'); await signupPage.getByLabel('姓名', { exact: true }).fill('注册同学');
+    await signupPage.getByRole('button', { name: '匹配班级名单' }).click();
+    await signupPage.getByLabel('设置密码', { exact: true }).fill('Student-password-123'); await signupPage.getByLabel('确认密码', { exact: true }).fill('Student-password-123');
+    assert.equal(await signupPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'signup mobile overflow');
+    await signupPage.getByRole('button', { name: '提交注册申请' }).click(); await signupPage.getByText(/申请已提交，等待任课老师/).waitFor();
+    const registrationTeacherPage = await browser.newPage(); watchPage(registrationTeacherPage);
+    const registrationTeacher = createFixtures(); registrationTeacher.login(); registrationTeacher.registrations = signupData.registrations;
+    await installApi(registrationTeacherPage, registrationTeacher); await registrationTeacherPage.goto(`${baseUrl}/classes/class-1/registrations`);
+    await registrationTeacherPage.getByRole('checkbox', { name: '选择注册同学的申请' }).check();
+    await registrationTeacherPage.getByRole('button', { name: '通过所选（1）' }).click(); await registrationTeacherPage.getByText('已处理 1 条注册申请').waitFor();
+    assert.equal(signupData.registrations[0].status, 'APPROVED');
+    await signupPage.getByRole('link', { name: '返回登录', exact: true }).click();
+    await signupPage.getByLabel('用户名', { exact: true }).fill('009'); await signupPage.getByLabel('密码', { exact: true }).fill('Student-password-123');
+    await signupPage.getByRole('button', { name: '登录', exact: true }).click(); await signupPage.getByRole('heading', { name: '我的考勤与平时分' }).waitFor();
+    await signupPage.close(); await registrationTeacherPage.close();
+    const studentPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    watchPage(studentPage);
+    const studentData = createFixtures('STUDENT'); studentData.login(); studentData.monitorGrants = ['mi1']; studentData.canReview = true; studentData.registrations = [{ id: 'monitor-review', name: '班长审核同学', student_number: '010', status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true }];
+    await installApi(studentPage, studentData); await studentPage.goto(`${baseUrl}/scores`);
+    await studentPage.getByRole('heading', { name: '我的考勤与平时分' }).waitFor();
+    assert.equal(new URL(studentPage.url()).pathname, '/student');
+    await studentPage.getByText('老师暂未开放考勤查看').waitFor();
+    await studentPage.getByText('老师暂未开放平时分查看').waitFor();
+    studentData.visibility = { attendance_visible: true, score_visibility: 'TOTAL' };
+    await studentPage.getByRole('button', { name: '刷新数据' }).click();
+    await studentPage.getByText('75.2', { exact: true }).waitFor();
+    await studentPage.getByRole('cell', { name: '出勤', exact: true }).waitFor();
+    assert.equal(await studentPage.getByText('项目明细', { exact: true }).count(), 0);
+    studentData.visibility = { attendance_visible: false, score_visibility: 'HIDDEN' };
+    await studentPage.getByRole('button', { name: '刷新数据' }).click();
+    await studentPage.getByText('老师暂未开放平时分查看').waitFor();
+    assert.equal(await studentPage.getByText('75.2', { exact: true }).count(), 0);
+    assert.equal(await studentPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'student mobile overflow');
+    await studentPage.getByRole('link', { name: '班长登记授权项目' }).click();
+    await studentPage.getByRole('heading', { name: '授权项目平时分' }).waitFor();
+    assert.equal(await studentPage.getByLabel('班长本人本次积分').isDisabled(), true);
+    assert.equal(await studentPage.getByRole('button', { name: '新建项目', exact: true }).count(), 0);
+    await studentPage.getByLabel('被登记同学本次积分').fill('2.5');
+    await studentPage.getByLabel('被登记同学备注').fill('班长代录');
+    await studentPage.getByRole('button', { name: '保存本次录入' }).click();
+    await studentPage.getByText('授权项目积分已保存').waitFor();
+    assert.equal(studentData.monitorRecord.points, '2.5');
+    assert.equal(studentData.monitorRecord.note, '班长代录');
+    assert.equal(await studentPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'monitor mobile overflow');
+    await studentPage.getByRole('link', { name: '返回个人中心' }).click();
+    await studentPage.getByRole('link', { name: '审核本班学生注册' }).click();
+    await studentPage.getByRole('heading', { name: '学生注册审核' }).waitFor();
+    await studentPage.getByRole('button', { name: '通过', exact: true }).click(); await studentPage.getByText('已处理 1 条注册申请').waitFor();
+    assert.equal(studentData.registrations[0].status, 'APPROVED');
+    assert.equal(await studentPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'review mobile overflow');
+    await studentPage.close();
 
     const adminPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     watchPage(adminPage);
@@ -136,6 +236,31 @@ async function run() {
     await page.getByText('服务设计专题').waitFor();
 
     await page.getByRole('link', { name: '管理名单' }).first().click(); await page.getByRole('heading', { name: '2024 级 2 班' }).waitFor();
+    await page.getByRole('button', { name: '编辑张敏', exact: true }).click();
+    await page.getByRole('heading', { name: '编辑学生资料' }).waitFor();
+    assert.equal(await page.getByLabel('学号', { exact: true }).inputValue(), '20260001');
+    await page.getByLabel('专业', { exact: true }).fill('交互设计');
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.getByText('学生资料已保存', { exact: true }).waitFor();
+    await page.getByRole('cell', { name: '交互设计', exact: true }).waitFor();
+    assert.equal(fixtures.roster[0].student.major, '交互设计');
+    await page.getByRole('button', { name: '班长授权管理' }).click();
+    await page.getByRole('checkbox', { name: '允许审核本班学生注册' }).check();
+    await page.getByRole('checkbox', { name: /班长登记项目/ }).check();
+    await page.getByRole('button', { name: '保存授权' }).click();
+    await page.getByText('班长授权已更新').waitFor();
+    assert.deepEqual(fixtures.monitorGrants, ['mi1']);
+    await page.getByRole('button', { name: '撤销全部授权' }).click();
+    await page.getByRole('button', { name: '撤销全部授权' }).waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('fieldset input[type=checkbox]')?.checked);
+    assert.deepEqual(fixtures.monitorGrants, []);
+    await page.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('button', { name: '学生查看设置' }).click();
+    await page.getByLabel('考勤数据').selectOption('true');
+    await page.getByLabel('平时分数据').selectOption('TOTAL');
+    await page.getByRole('button', { name: '保存设置' }).click();
+    await page.getByText('学生查看权限已保存').waitFor();
+    assert.deepEqual(fixtures.visibility, { attendance_visible: true, score_visibility: 'TOTAL' });
     await page.getByRole('button', { name: '导入名单' }).click(); await page.locator('input[type=file]').setInputFiles({ name: 'roster.csv', mimeType: 'text/csv', buffer: Buffer.from('student_number,name\n1,test') });
     await page.getByText('检查校验结果并选择重复数据处理方式。').waitFor(); await page.getByRole('button', { name: '确认导入' }).click(); await page.getByRole('heading', { name: '导入完成' }).waitFor(); await page.getByRole('button', { name: '完成' }).click();
 
@@ -192,7 +317,7 @@ async function run() {
     }
     const unnamed = await page.locator('button:visible').evaluateAll((items) => items.filter((item) => !(item.getAttribute('aria-label') || item.textContent.trim())).length);
     assert.equal(unnamed, 0, 'all visible buttons need an accessible name'); assert.deepEqual(errors, []);
-    console.log('React browser checks passed: admin routing/logout, teacher attendance and scores workflows, accessibility, and responsive overflow.');
+    console.log('React browser checks passed: student registration and teacher/monitor approval, monitor grants/revocation and scoring, student privacy and visibility, admin routing/logout, teacher attendance and scores workflows, accessibility, and responsive overflow.');
   } finally {
     if (browser) await browser.close(); vite.kill();
   }

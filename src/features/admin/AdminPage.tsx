@@ -55,7 +55,7 @@ export function AdminPage() {
   const q = params.get('q') ?? '';
   const status = normalizedStatus(params.get('status'));
   const listParams = {
-    role: 'TEACHER' as const,
+    role: params.get('role') === 'STUDENT' ? 'STUDENT' as const : 'TEACHER' as const,
     page,
     page_size: 20,
     q: q || undefined,
@@ -67,16 +67,16 @@ export function AdminPage() {
     queryFn: () => api.adminUsers.list(listParams),
   });
   const allCount = useQuery({
-    queryKey: ['admin-user-count', 'ALL'],
-    queryFn: () => api.adminUsers.list({ role: 'TEACHER', page: 1, page_size: 1 }),
+    queryKey: ['admin-user-count', listParams.role, 'ALL'],
+    queryFn: () => api.adminUsers.list({ role: listParams.role, page: 1, page_size: 1 }),
   });
   const activeCount = useQuery({
-    queryKey: ['admin-user-count', 'ACTIVE'],
-    queryFn: () => api.adminUsers.list({ role: 'TEACHER', status: 'ACTIVE', page: 1, page_size: 1 }),
+    queryKey: ['admin-user-count', listParams.role, 'ACTIVE'],
+    queryFn: () => api.adminUsers.list({ role: listParams.role, status: 'ACTIVE', page: 1, page_size: 1 }),
   });
   const disabledCount = useQuery({
-    queryKey: ['admin-user-count', 'DISABLED'],
-    queryFn: () => api.adminUsers.list({ role: 'TEACHER', status: 'DISABLED', page: 1, page_size: 1 }),
+    queryKey: ['admin-user-count', listParams.role, 'DISABLED'],
+    queryFn: () => api.adminUsers.list({ role: listParams.role, status: 'DISABLED', page: 1, page_size: 1 }),
   });
 
   async function refreshUsers() {
@@ -105,7 +105,7 @@ export function AdminPage() {
     onSuccess: async (updated) => {
       await refreshUsers();
       setDialog(null);
-      toast.show(updated.status === 'ACTIVE' ? '教师账号已启用' : '教师账号已停用');
+      toast.show(updated.status === 'ACTIVE' ? '账号已启用' : '账号已停用');
     },
   });
   const resetPassword = useMutation({
@@ -123,7 +123,7 @@ export function AdminPage() {
     },
   });
 
-  function updateParam(key: 'q' | 'status' | 'page', value: string) {
+  function updateParam(key: 'q' | 'status' | 'page' | 'role', value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
@@ -144,23 +144,23 @@ export function AdminPage() {
       <div className="admin-page-header">
         <div className="admin-identity">
           <span className="admin-shield" aria-hidden="true"><ShieldCheck /></span>
-          <div><p className="eyebrow">系统管理</p><h1 id="admin-title">教师账号</h1><p>创建并维护教师登录资格。</p></div>
+          <div><p className="eyebrow">系统管理</p><h1 id="admin-title">{listParams.role === 'STUDENT' ? '学生账号' : '教师账号'}</h1><p>维护账号登录资格，学生账号由任课老师在班级名单中开通。</p></div>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>
       </div>
 
-      <div className="metrics-grid admin-summary" aria-label="教师账号统计">
-        <article className="metric" aria-label="教师账号总数"><UserRound aria-hidden="true" /><span>账号总数</span><strong>{allCount.data?.total ?? '-'}</strong></article>
-        <article className="metric" aria-label="启用教师数"><UserCheck aria-hidden="true" /><span>已启用</span><strong>{activeCount.data?.total ?? '-'}</strong></article>
-        <article className="metric" aria-label="停用教师数"><UserX aria-hidden="true" /><span>已停用</span><strong>{disabledCount.data?.total ?? '-'}</strong></article>
+      <div className="metrics-grid admin-summary" aria-label={listParams.role === 'STUDENT' ? '学生账号统计' : '教师账号统计'}>
+        <article className="metric" aria-label={listParams.role === 'STUDENT' ? '学生账号总数' : '教师账号总数'}><UserRound aria-hidden="true" /><span>账号总数</span><strong>{allCount.data?.total ?? '-'}</strong></article>
+        <article className="metric" aria-label={listParams.role === 'STUDENT' ? '启用学生数' : '启用教师数'}><UserCheck aria-hidden="true" /><span>已启用</span><strong>{activeCount.data?.total ?? '-'}</strong></article>
+        <article className="metric" aria-label={listParams.role === 'STUDENT' ? '停用学生数' : '停用教师数'}><UserX aria-hidden="true" /><span>已停用</span><strong>{disabledCount.data?.total ?? '-'}</strong></article>
       </div>
 
-      <div className="toolbar admin-toolbar">
-        <label className="search-field"><span>搜索教师</span><Search aria-hidden="true" /><input value={q} onChange={(event) => updateParam('q', event.target.value)} placeholder="输入姓名或用户名" /></label>
+      <div className="toolbar admin-toolbar"><label><span className="sr-only">账号类型</span><select aria-label="账号类型" value={listParams.role} onChange={(e) => updateParam('role', e.target.value)}><option value="TEACHER">教师账号</option><option value="STUDENT">学生账号</option></select></label>
+        <label className="search-field"><span>{listParams.role === 'STUDENT' ? '搜索学生' : '搜索教师'}</span><Search aria-hidden="true" /><input value={q} onChange={(event) => updateParam('q', event.target.value)} placeholder="输入姓名或用户名" /></label>
         <label><span>账号状态</span><select value={status ?? ''} onChange={(event) => updateParam('status', event.target.value)}><option value="">全部状态</option><option value="ACTIVE">已启用</option><option value="DISABLED">已停用</option></select></label>
       </div>
 
-      {list.isLoading ? <LoadingState label="正在加载教师账号..." /> : list.error ? <ErrorState message={list.error.message} retry={() => void list.refetch()} /> : accounts.length === 0 ? <EmptyState title="没有匹配的教师账号" description="调整搜索或筛选条件，也可以创建新的教师账号。" action={<button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>} /> : <>
+      {list.isLoading ? <LoadingState label="正在加载账号..." /> : list.error ? <ErrorState message={list.error.message} retry={() => void list.refetch()} /> : accounts.length === 0 ? <EmptyState title={listParams.role === 'STUDENT' ? '没有匹配的学生账号' : '没有匹配的教师账号'} description="调整搜索或筛选条件；学生账号由任课老师开通。" action={<button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>} /> : <>
         <div className="panel admin-table table-scroll">
           <table>
             <thead><tr><th>教师</th><th>用户名</th><th>账号状态</th><th>密码状态</th><th>最近登录</th><th><span className="sr-only">账号操作</span></th></tr></thead>
@@ -238,7 +238,7 @@ function StatusDialog({ account, pending, onClose, onConfirm }: { account: User;
     try { await onConfirm(disabling ? 'DISABLED' : 'ACTIVE'); }
     catch (reason) { setError((reason as Error).message); }
   }
-  return <Dialog title={`${disabling ? '停用' : '启用'}教师账号`} description={`${account.display_name}（${account.username}）`} onClose={onClose} footer={<><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className={`btn ${disabling ? 'btn-danger' : 'btn-primary'}`} type="button" disabled={pending} onClick={() => void confirm()}>确认{disabling ? '停用' : '启用'}</button></>}>
+  return <Dialog title={`${disabling ? '停用' : '启用'}${account.role === 'STUDENT' ? '学生' : '教师'}账号`} description={`${account.display_name}（${account.username}）`} onClose={onClose} footer={<><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className={`btn ${disabling ? 'btn-danger' : 'btn-primary'}`} type="button" disabled={pending} onClick={() => void confirm()}>确认{disabling ? '停用' : '启用'}</button></>}>
     <p>{disabling ? '停用后教师将无法登录，现有登录会话将被撤销。' : '启用后教师可以继续使用原密码登录。'}</p>
     {error && <div className="form-alert" role="alert">{error}</div>}
   </Dialog>;

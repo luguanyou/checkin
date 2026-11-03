@@ -1,3 +1,7 @@
+import { StudentRegistrationPage } from '../features/registrations/StudentRegistrationPage';
+import { RegistrationReviewPage } from '../features/registrations/RegistrationReviewPage';
+import { MonitorPage } from '../features/monitors/MonitorPage';
+import { StudentPortalPage } from '../features/portal/StudentPortalPage';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -14,7 +18,7 @@ import type { UserRole } from '../api/types';
 import { useAuth } from './auth';
 
 function Boot() { return <div className="boot-state" role="status">正在恢复登录状态...</div>; }
-function homeFor(role: UserRole | undefined) { return role === 'ADMIN' ? '/admin' : '/'; }
+function homeFor(role: UserRole | undefined) { return role === 'ADMIN' ? '/admin' : role === 'STUDENT' ? '/student' : '/'; }
 function ProtectedRoute() {
   const { status, user } = useAuth(); const location = useLocation();
   if (status === 'restoring') return <Boot />;
@@ -42,9 +46,11 @@ function RoleRoute({ role }: { role: UserRole }) {
 }
 export function AppRoutes() {
   return <Routes>
+    <Route path="/register" element={<PublicOnly><StudentRegistrationPage /></PublicOnly>} />
     <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
     <Route path="/change-password" element={<PasswordRoute />} />
     <Route element={<ProtectedRoute />}>
+      <Route element={<RoleRoute role="STUDENT" />}><Route path="student" element={<StudentPortalPage />} /><Route path="student/registrations/:classId" element={<RegistrationReviewPage />} /><Route path="student/monitor/:classId" element={<MonitorPage />} /></Route>
       <Route element={<RoleRoute role="ADMIN" />}>
         <Route path="admin" element={<AdminPage />} />
       </Route>
@@ -52,6 +58,7 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="courses" element={<CoursesPage />} />
+          <Route path="classes/:classId/registrations" element={<RegistrationReviewPage />} />
           <Route path="classes/:classId/roster" element={<RosterPage />} />
           <Route path="records" element={<RecordsPage />} />
           <Route path="scores" element={<ScoresPage />} />

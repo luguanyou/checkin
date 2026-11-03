@@ -32,7 +32,7 @@ def list_users(
     password_changed: Annotated[User, Depends(require_password_changed)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-    role: Annotated[Literal["ADMIN", "TEACHER"] | None, Query()] = None,
+    role: Annotated[Literal["ADMIN", "TEACHER", "STUDENT"] | None, Query()] = None,
     status: Annotated[Literal["ACTIVE", "DISABLED"] | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
 ) -> UserListResponse:

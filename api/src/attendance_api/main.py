@@ -30,6 +30,9 @@ from attendance_api.modules.courses.router import classes_router
 from attendance_api.modules.courses.router import router as courses_router
 from attendance_api.modules.exports.router import router as exports_router
 from attendance_api.modules.imports.router import router as imports_router
+from attendance_api.modules.monitors.router import router as monitors_router
+from attendance_api.modules.portal.router import router as portal_router
+from attendance_api.modules.registrations.router import router as registrations_router
 from attendance_api.modules.rosters.router import enrollments_router
 from attendance_api.modules.rosters.router import router as rosters_router
 from attendance_api.modules.scores.router import router as scores_router
@@ -118,6 +121,9 @@ def create_app() -> FastAPI:
     app.include_router(exports_router)
     app.include_router(scores_router)
     app.include_router(tts_router)
+    app.include_router(portal_router)
+    app.include_router(monitors_router)
+    app.include_router(registrations_router)
     return app
 
 

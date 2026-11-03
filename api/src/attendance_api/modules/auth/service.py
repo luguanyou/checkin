@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from attendance_api.config import get_settings
 from attendance_api.errors import ApiError
-from attendance_api.models import LoginSession, User
+from attendance_api.models import LoginSession, Student, StudentRegistration, User
 from attendance_api.models.base import utc_now
 from attendance_api.security.passwords import hash_password, verify_password
 from attendance_api.security.tokens import (
@@ -45,6 +45,27 @@ def login(
     password_matches = verify_password(
         user.password_hash if user is not None else _DUMMY_PASSWORD_HASH, password
     )
+    if user is None:
+        application = db.scalar(
+            select(StudentRegistration)
+            .join(Student, Student.id == StudentRegistration.student_id)
+            .where(func.lower(Student.student_number) == username.strip().lower())
+        )
+        if (
+            application
+            and application.password_hash
+            and verify_password(application.password_hash, password)
+        ):
+            if application.status == "PENDING":
+                raise ApiError(
+                    403, "REGISTRATION_PENDING", "注册申请正在审核，请等待任课老师或获授权班长处理"
+                )
+            if application.status == "REJECTED":
+                raise ApiError(
+                    403,
+                    "REGISTRATION_REJECTED",
+                    f"注册申请未通过：{application.review_reason or '请核对资料后重新申请'}",
+                )
     if user is None or not password_matches or user.status != "ACTIVE":
         if user is not None:
             user.failed_login_count += 1

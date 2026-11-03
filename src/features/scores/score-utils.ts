@@ -12,9 +12,14 @@ export function displayPoints(value: string | null | undefined) {
 }
 export function displayScore(value: string | null | undefined) {
   if (value == null) return '—';
+  const rounded = roundPoints(value);
+  return rounded.includes('.') ? rounded : `${rounded}.0`;
+}
+export function roundPoints(value: string) {
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return value;
   const negative = value.startsWith('-'); const [whole, fraction = ''] = value.replace(/^[+-]/, '').split('.');
-  const cents = BigInt(whole || '0') * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2)) + (Number(fraction[2] ?? '0') >= 5 ? 1n : 0n);
-  return `${negative && cents !== 0n ? '-' : ''}${cents / 100n}.${String(cents % 100n).padStart(2, '0')}`;
+  const tenths = BigInt(whole || '0') * 10n + BigInt(fraction[0] || '0') + (Number(fraction[1] ?? '0') >= 5 ? 1n : 0n);
+  return `${negative && tenths !== 0n ? '-' : ''}${tenths / 10n}${tenths % 10n ? `.${tenths % 10n}` : ''}`;
 }
 export function validDecimal(value: string, nonnegative = false) {
   return value.trim() === '' || (/^[+-]?(?:\d+(?:\.\d{0,4})?|\.\d{1,4})$/.test(value.trim()) && Number.isFinite(Number(value)) && (!nonnegative || Number(value) >= 0));

@@ -3,7 +3,7 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Literal, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from attendance_api.errors import ApiError
@@ -68,9 +68,7 @@ def calculate_summary(
             enrollment_id=enrollment_id,
             categories=categories,
             raw_score=display_decimal(raw) if ready else None,
-            final_score=display_decimal(max(Decimal(0), min(Decimal(100), raw)))
-            if ready
-            else None,
+            final_score=display_decimal(max(Decimal(0), min(Decimal(100), raw))) if ready else None,
             status=status,
         )
 
@@ -100,7 +98,9 @@ def _record_response(record: ScoreRecord) -> schema.ScoreRecord:
     )
 
 
-def get_book(db: Session, *, teacher_id: str, class_group_id: str) -> schema.ScoreBook:
+def get_book(
+    db: Session, *, teacher_id: str, class_group_id: str, enrollment_id: str | None = None
+) -> schema.ScoreBook:
     class_group, course = get_owned_class_group(
         db, teacher_id=teacher_id, class_group_id=class_group_id
     )
@@ -118,6 +118,7 @@ def get_book(db: Session, *, teacher_id: str, class_group_id: str) -> schema.Sco
         select(Enrollment, Student)
         .join(Student, Student.id == Enrollment.student_id)
         .where(Enrollment.class_group_id == class_group_id)
+        .where(Enrollment.id == enrollment_id if enrollment_id is not None else true())
         .order_by(Student.student_number, Enrollment.id)
     ).all()
     records = list(
@@ -125,6 +126,9 @@ def get_book(db: Session, *, teacher_id: str, class_group_id: str) -> schema.Sco
             select(ScoreRecord)
             .join(ScoreItem, ScoreItem.id == ScoreRecord.item_id)
             .where(ScoreItem.class_group_id == class_group_id)
+            .where(
+                ScoreRecord.enrollment_id == enrollment_id if enrollment_id is not None else true()
+            )
             .order_by(ScoreRecord.id)
         )
     )
@@ -219,6 +223,7 @@ def mutate_book(
     ip_address: str,
     request_id: str,
     item_id: str | None = None,
+    actor: User | None = None,
 ) -> schema.ScoreBook:
     transaction = db.begin_nested()
     try:
@@ -227,7 +232,7 @@ def mutate_book(
         def audit(action: str, before: dict[str, object] | None, after: dict[str, object]) -> None:
             append_audit(
                 db,
-                actor_user_id=teacher.id,
+                actor_user_id=actor.id if actor is not None else teacher.id,
                 action=action,
                 entity_type="score_book",
                 entity_id=class_group_id,

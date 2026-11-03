@@ -62,9 +62,10 @@ describe('usual scores', () => {
   });
   it('retains note and fractional input on a network failure for retry', async () => {
     const user = userEvent.setup(); api.scores.saveRecords.mockRejectedValueOnce(new Error('网络中断')); mount();
-    fireEvent.change(await screen.findByLabelText('张敏本次积分'), { target: { value: '0.125' } });
+    await user.click(await screen.findByLabelText('张敏本次积分'));
+    fireEvent.change(screen.getByLabelText('张敏本次积分'), { target: { value: '0.125' } });
     await user.type(screen.getByLabelText('张敏备注'), '补交'); await user.click(screen.getByRole('button', { name: '保存本次录入' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('网络中断'); expect(screen.getByLabelText('张敏本次积分')).toHaveValue(0.125); expect(screen.getByLabelText('张敏备注')).toHaveValue('补交');
+    expect(await screen.findByRole('alert')).toHaveTextContent('网络中断'); expect(screen.getByLabelText('张敏本次积分')).toHaveValue(0.1); expect(screen.getByLabelText('张敏备注')).toHaveValue('补交');
     expect(screen.getByRole('button', { name: '保存本次录入' })).toBeEnabled();
   });
   it('creates a dated project in its chosen category without requiring scoring rules', async () => {
@@ -100,7 +101,7 @@ describe('usual scores', () => {
   it('displays the server raw and clamped summary without locally recomputing it', async () => {
     const user = userEvent.setup(); api.scores.get.mockResolvedValue({ ...structuredClone(book), rules_ready: true, summaries: [{ enrollment_id: 'e1', categories: [{ category: 'HOMEWORK', points: '120', contribution: '120', pending: 0 }], raw_score: '190', final_score: '100', status: 'READY' }] }); mount(); await screen.findByLabelText('张敏本次积分');
     await user.click(screen.getByRole('button', { name: '平时成绩汇总' }));
-    expect(screen.getByText('190.00')).toBeInTheDocument(); expect(screen.getByText('100.00')).toBeInTheDocument(); expect(screen.getByText('封顶 100 分')).toBeInTheDocument();
+    expect(screen.getByText('190.0')).toBeInTheDocument(); expect(screen.getByText('100.0')).toBeInTheDocument(); expect(screen.getByText('封顶 100 分')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '导出正式汇总' })).toBeEnabled();
   });
   it('filters score entry and summary rows by student number or name', async () => {
@@ -158,4 +159,20 @@ describe('usual scores', () => {
     await act(async () => { await client.refetchQueries({ queryKey: ['scores', 'c1'] }); await client.refetchQueries({ queryKey: ['courses', 'scores-context'] }); });
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2)); expect(screen.getByLabelText('张敏本次积分')).toHaveValue(0.5);
   });
+});
+
+it('lets zero be cleared and rounds points to one decimal with arrow increments of one', async () => {
+  const user = userEvent.setup(); mount();
+  const input = await screen.findByLabelText('张敏本次积分');
+  await user.clear(input);
+  expect(input).toHaveValue(null);
+  await user.type(input, '1.26');
+  await user.tab();
+  expect(input).toHaveValue(1.3);
+  fireEvent.keyDown(input, { key: 'ArrowUp' });
+  expect(input).toHaveValue(2.3);
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  expect(input).toHaveValue(1.3);
+  await user.click(screen.getByRole('button', { name: '保存本次录入' }));
+  expect(api.scores.saveRecords).toHaveBeenCalledWith('c1', 'i1', { expected_version: 2, records: [{ enrollment_id: 'e1', points: '1.3', note: '' }] });
 });

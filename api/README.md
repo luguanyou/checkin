@@ -42,7 +42,7 @@ ADMIN_PASSWORD=请替换为安全的管理员密码
 启动 API：
 
 ```powershell
-uv run uvicorn attendance_api.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn attendance_api.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src
 ```
 
 OpenAPI 文档地址：`http://127.0.0.1:8000/docs`，原始契约地址：`http://127.0.0.1:8000/openapi.json`。

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, type FormEvent } from 'react';
 import { LockKeyhole, UserRound } from 'lucide-react';
 import { useAuth } from '../../app/auth';
@@ -16,12 +17,12 @@ export function LoginPage() {
   }
   return <main className="auth-page"><section className="auth-panel" aria-labelledby="login-title">
     <div className="auth-brand"><span aria-hidden="true">课</span><strong>课点</strong></div>
-    <div className="auth-copy"><p className="eyebrow">教师工作台</p><h1 id="login-title">登录课点</h1><p>进入课程、名单与课堂点名。</p></div>
+    <div className="auth-copy"><p className="eyebrow">课堂管理与学生查询</p><h1 id="login-title">登录课点</h1><p>教师管理课堂；学生可自助注册，审核通过后用学号登录。</p></div>
     <form onSubmit={submit} noValidate>
       <label className="field"><span>用户名</span><span className="input-wrap"><UserRound aria-hidden="true" /><input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} aria-invalid={Boolean(errors.username)} /></span>{errors.username && <small className="field-error">{errors.username}</small>}</label>
       <label className="field"><span>密码</span><span className="input-wrap"><LockKeyhole aria-hidden="true" /><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={Boolean(errors.password)} /></span>{errors.password && <small className="field-error">{errors.password}</small>}</label>
       {serverError && <div className="form-alert" role="alert">{serverError}</div>}
       <button className="btn btn-primary btn-block" type="submit" disabled={pending}>{pending ? '正在登录...' : '登录'}</button>
-    </form>
+    </form><Link className="btn btn-ghost btn-block" to="/register">学生注册</Link>
   </section></main>;
 }

@@ -6,8 +6,14 @@ from sqlalchemy.orm import Session
 from attendance_api.db import get_db
 from attendance_api.models import Enrollment, Student, User
 from attendance_api.modules.auth.dependencies import require_password_changed, require_teacher
-from attendance_api.modules.rosters.service import get_roster, update_enrollment_status
+from attendance_api.modules.rosters.service import (
+    create_roster_member,
+    get_roster,
+    update_enrollment_status,
+    update_roster_member,
+)
 from attendance_api.schemas.rosters import (
+    CreateRosterMemberRequest,
     RosterListResponse,
     RosterMemberResponse,
     StudentResponse,
@@ -80,6 +86,57 @@ def change_enrollment_status(
         enrollment_id=enrollment_id,
         status=payload.status,
         ip_address=ip_address,
+        request_id=str(request.state.request_id),
+    )
+    return roster_member_response(enrollment, student)
+
+
+@router.post(
+    "/{class_group_id}/roster",
+    response_model=RosterMemberResponse,
+    status_code=201,
+    operation_id="createRosterMember",
+)
+def add_roster_member(
+    class_group_id: str,
+    payload: CreateRosterMemberRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    teacher: Annotated[User, Depends(require_teacher)],
+    password_changed: Annotated[User, Depends(require_password_changed)],
+) -> RosterMemberResponse:
+    enrollment, student = create_roster_member(
+        db,
+        teacher=teacher,
+        class_group_id=class_group_id,
+        payload=payload,
+        ip_address=request.client.host if request.client else "unknown",
+        request_id=str(request.state.request_id),
+    )
+    return roster_member_response(enrollment, student)
+
+
+@router.put(
+    "/{class_group_id}/roster/{enrollment_id}",
+    response_model=RosterMemberResponse,
+    operation_id="updateRosterMember",
+)
+def edit_roster_member(
+    class_group_id: str,
+    enrollment_id: str,
+    payload: CreateRosterMemberRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    teacher: Annotated[User, Depends(require_teacher)],
+    password_changed: Annotated[User, Depends(require_password_changed)],
+) -> RosterMemberResponse:
+    enrollment, student = update_roster_member(
+        db,
+        teacher=teacher,
+        class_group_id=class_group_id,
+        enrollment_id=enrollment_id,
+        payload=payload,
+        ip_address=request.client.host if request.client else "unknown",
         request_id=str(request.state.request_id),
     )
     return roster_member_response(enrollment, student)

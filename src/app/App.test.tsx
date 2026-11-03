@@ -163,3 +163,22 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/admin');
   });
 });
+
+it('routes a student away from teacher pages into their own portal', async () => {
+  queryClient.clear();
+  window.history.replaceState({}, '', '/scores');
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input).endsWith('/auth/refresh')) {
+      const response = sessionResponse('TEACHER'); const session = await response.json();
+      session.user.role = 'STUDENT'; session.user.username = '001';
+      return new Response(JSON.stringify(session), { headers: { 'Content-Type': 'application/json' } });
+    }
+    return emptyPageResponse();
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(<App />);
+  expect(await screen.findByRole('heading', { name: '我的考勤与平时分' })).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/student');
+  expect(fetcher.mock.calls.every(([url]) => /auth\/refresh|student\/classes/.test(String(url)))).toBe(true);
+  vi.unstubAllGlobals(); queryClient.clear(); window.history.replaceState({}, '', '/');
+});

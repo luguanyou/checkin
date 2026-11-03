@@ -18,6 +18,9 @@ import type {
   UserStatus,
 } from './types';
 import { ApiClient } from './client';
+import type { RegistrationApplication, RegistrationClass, StudentRegistrationInput } from './registration-types';
+import type { MonitorManagement, MonitorProject, MonitorProjectOption, MonitorSaveInput } from './monitor-types';
+import type { StudentVisibility, StudentClass, StudentClassData } from './portal-types';
 import type { ScoreBook, ScoreHistory, ScoreItemInput, ScoreRecordInput, ScoreSettings } from './scores-types';
 
 function queryString(values: Record<string, string | number | undefined>) {
@@ -35,6 +38,26 @@ function json(method: string, body?: unknown): RequestInit {
 
 export function createApi(client: ApiClient) {
   return {
+    registrations: {
+      lookup: (student_number: string, name: string) => client.request<{ items: RegistrationClass[] }>('/auth/student-registration/classes', json('POST', { student_number, name }), false),
+      register: (input: StudentRegistrationInput) => client.request<{ status: string; message: string }>('/auth/student-register', json('POST', input), false),
+      list: (classId: string, status: string) => client.request<{ items: RegistrationApplication[] }>(`/classes/${classId}/registrations${queryString({ status })}`, { cache: 'no-store' }),
+      review: (classId: string, registration_ids: string[], decision: 'APPROVED'|'REJECTED', reason?: string) => client.request<{ reviewed: number }>(`/classes/${classId}/registrations/review`, json('POST', { registration_ids, decision, reason })),
+    },
+    monitors: {
+      manage: (classId: string) => client.request<MonitorManagement>(`/classes/${classId}/monitors`),
+      setGrants: (classId: string, userId: string, item_ids: string[], can_review_registrations = false) => client.request<MonitorManagement>(`/classes/${classId}/monitors/${userId}`, json('PUT', { item_ids, can_review_registrations })),
+      projects: () => client.request<{ items: MonitorProjectOption[] }>('/student/monitor-projects'),
+      get: (classId: string, itemId: string) => client.request<MonitorProject>(`/student/classes/${classId}/monitor-projects/${itemId}`, { cache: 'no-store' }),
+      save: (classId: string, itemId: string, input: MonitorSaveInput) => client.request<MonitorProject>(`/student/classes/${classId}/monitor-projects/${itemId}/records`, json('PUT', input)),
+    },
+    portal: {
+      visibility: (classId: string) => client.request<StudentVisibility>(`/classes/${classId}/student-visibility`),
+      setVisibility: (classId: string, input: StudentVisibility) => client.request<StudentVisibility>(`/classes/${classId}/student-visibility`, json('PUT', input)),
+      createAccount: (classId: string, studentId: string, temporary_password: string) => client.request<{ username: string }>(`/classes/${classId}/students/${studentId}/account`, json('POST', { temporary_password })),
+      classes: () => client.request<{ items: StudentClass[] }>('/student/classes'),
+      get: (classId: string) => client.request<StudentClassData>(`/student/classes/${classId}`, { cache: 'no-store' }),
+    },
     scores: {
       get: (classId: string) => client.request<ScoreBook>(`/classes/${classId}/scores`),
       saveSettings: (classId: string, input: ScoreSettings & { expected_version: number }) => client.request<ScoreBook>(`/classes/${classId}/scores/settings`, json('PUT', input)),
@@ -70,6 +93,8 @@ export function createApi(client: ApiClient) {
       ),
     },
     roster: {
+      update: (classId: string, enrollmentId: string, input: { student_number: string; name: string; gender?: string; major?: string }) => client.request<RosterMember>(`/classes/${classId}/roster/${enrollmentId}`, json('PUT', input)),
+      create: (classId: string, input: { student_number: string; name: string; gender?: string; major?: string }) => client.request<RosterMember>(`/classes/${classId}/roster`, json('POST', input)),
       list: (classId: string, params: { page?: number; page_size?: number; status?: string; q?: string } = {}) => client.request<RosterPage>(`/classes/${classId}/roster${queryString(params)}`),
       updateStatus: (enrollmentId: string, status: 'ACTIVE' | 'REMOVED') => client.request<RosterMember>(`/enrollments/${enrollmentId}/status`, json('PATCH', { status })),
       preview: (classId: string, file: File) => {

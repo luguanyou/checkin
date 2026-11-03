@@ -169,7 +169,7 @@ function Start-DevelopmentStack {
         Write-Host '[6/7] Starting API and frontend windows...'
         Start-Process -FilePath 'powershell.exe' -WorkingDirectory $apiRoot -ArgumentList @(
             '-NoLogo', '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command',
-            'uv run uvicorn attendance_api.main:app --host 127.0.0.1 --port 8000'
+            'uv run uvicorn attendance_api.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src'
         ) | Out-Null
         Start-Process -FilePath 'powershell.exe' -WorkingDirectory $projectRoot -ArgumentList @(
             '-NoLogo', '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command',

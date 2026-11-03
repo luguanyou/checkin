@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import field_serializer
+from pydantic import Field, field_serializer, field_validator
 
 from attendance_api.schemas.common import ApiModel, TimestampedApiModel
 
@@ -12,6 +12,18 @@ class StudentResponse(ApiModel):
     name: str
     gender: str | None
     major: str | None
+
+
+class CreateRosterMemberRequest(ApiModel):
+    student_number: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=100)
+    gender: str | None = Field(default=None, max_length=20)
+    major: str | None = Field(default=None, max_length=120)
+
+    @field_validator("student_number", "name", "gender", "major", mode="before")
+    @classmethod
+    def strip_value(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class RosterMemberResponse(TimestampedApiModel):

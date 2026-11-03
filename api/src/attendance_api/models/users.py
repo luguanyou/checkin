@@ -15,7 +15,7 @@ from attendance_api.models.base import (
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("role IN ('ADMIN', 'TEACHER')", name="role"),
+        CheckConstraint("role IN ('ADMIN', 'TEACHER', 'STUDENT')", name="role"),
         CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="status"),
         CheckConstraint("failed_login_count >= 0", name="failed_login_count_nonnegative"),
         Index("ix_users_role_status", "role", "status"),
@@ -23,6 +23,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     username: Mapped[str] = mapped_column(String(64), unique=True)
+    student_id: Mapped[str | None] = mapped_column(
+        ForeignKey("students.id", ondelete="RESTRICT"), unique=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20))

@@ -181,3 +181,30 @@ def test_enrollment_status_change_preserves_attendance_snapshot(
     db_session.refresh(record)
     assert record.student_name_snapshot == "林晓雨"
     assert record.class_name_snapshot == "2024 级 2 班"
+
+
+def test_add_student_and_restore(roster_context: RosterContext) -> None:
+    url = f"/api/v1/classes/{roster_context.class_group.id}/roster"
+    payload = {"student_number": " 0099 ", "name": " 新同学 ", "major": "设计"}
+    response = roster_context.client.post(url, json=payload)
+    assert response.status_code == 201
+    member = response.json()
+    assert member["student"]["student_number"] == "0099"
+    assert member["student"]["name"] == "新同学"
+    assert roster_context.client.post(url, json=payload).status_code == 409
+    roster_context.client.patch(
+        f"/api/v1/enrollments/{member['enrollment_id']}/status", json={"status": "REMOVED"}
+    )
+    restored = roster_context.client.post(url, json=payload)
+    assert restored.status_code == 201
+    assert restored.json()["enrollment_id"] == member["enrollment_id"]
+    assert restored.json()["enrollment_status"] == "ACTIVE"
+
+
+@pytest.mark.parametrize("field", ["student_number", "name"])
+def test_add_student_rejects_blank(roster_context: RosterContext, field: str) -> None:
+    payload = {"student_number": "001", "name": "同学", field: "   "}
+    response = roster_context.client.post(
+        f"/api/v1/classes/{roster_context.class_group.id}/roster", json=payload
+    )
+    assert response.status_code == 400

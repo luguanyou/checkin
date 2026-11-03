@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from attendance_api.models.base import (
@@ -39,6 +39,8 @@ class ClassGroup(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     course_id: Mapped[str] = mapped_column(
         ForeignKey("courses.id", ondelete="RESTRICT", onupdate="RESTRICT")
     )
+    attendance_visible: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
+    score_visibility: Mapped[str] = mapped_column(String(20), server_default="HIDDEN")
     name: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(20), server_default="ACTIVE")
 
