@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -8,8 +8,8 @@ import { RegistrationReviewPage } from './RegistrationReviewPage';
 import { ToastProvider } from '../../components/ToastProvider';
 const registrations = { lookup: vi.fn(), register: vi.fn(), list: vi.fn(), review: vi.fn() };
 vi.mock('../../app/auth', () => ({ useApi: () => ({ registrations }), useAuth: () => ({ user: { role: 'TEACHER' } }) }));
-function mount(element: React.ReactNode, review = false) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[review ? '/classes/c1/registrations' : '/register']}><ToastProvider><Routes><Route path={review ? '/classes/:classId/registrations' : '/register'} element={element} /></Routes></ToastProvider></MemoryRouter></QueryClientProvider>);
+function mount(element: React.ReactNode, review = false, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[review ? '/classes/c1/registrations' : '/register']}><ToastProvider><Routes><Route path={review ? '/classes/:classId/registrations' : '/register'} element={element} /></Routes></ToastProvider></MemoryRouter></QueryClientProvider>);
 }
 beforeEach(() => {
   vi.clearAllMocks(); registrations.lookup.mockResolvedValue({ items: [{ id: 'c1', name: '一班', course_name: '设计', term: '2026' }] }); registrations.register.mockResolvedValue({ status: 'PENDING' });
@@ -48,4 +48,25 @@ it('retains selection and reason when review fails', async () => {
   await user.type(screen.getByLabelText('审核备注（选填，驳回时向学生说明原因）'), '请核对身份');
   await user.click(screen.getByRole('button', { name: '驳回所选' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('授权已撤销'); expect(screen.getByRole('checkbox', { name: '选择同学的申请' })).toBeChecked();
+});
+
+it('reloads a recently cached empty list when the teacher returns after registration', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+  client.setQueryData(['registrations', 'c1', 'PENDING'], { items: [] });
+  mount(<RegistrationReviewPage />, true, client);
+  expect(await screen.findByText('同学')).toBeInTheDocument();
+  expect(registrations.list).toHaveBeenCalledWith('c1', 'PENDING');
+});
+
+it('automatically fetches new applications while the review page stays open', async () => {
+  registrations.list.mockResolvedValueOnce({ items: [] });
+  vi.useFakeTimers();
+  try {
+    mount(<RegistrationReviewPage />, true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByText('暂无匹配的注册申请')).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_001); });
+    expect(registrations.list).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('同学')).toBeInTheDocument();
+  } finally { vi.useRealTimers(); }
 });

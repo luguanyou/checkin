@@ -9,7 +9,13 @@ const labels = { PENDING: '待审核', APPROVED: '已通过', REJECTED: '已驳�
 export function RegistrationReviewPage() {
   const api = useApi(); const { user } = useAuth(); const { classId = '' } = useParams(); const client = useQueryClient(); const toast = useToast();
   const [status, setStatus] = useState('PENDING'); const [selected, setSelected] = useState<string[]>([]); const [reason, setReason] = useState('');
-  const query = useQuery({ queryKey: ['registrations', classId, status], queryFn: () => api.registrations.list(classId, status) });
+  // Applications arrive from other sessions; a cached empty list must be refreshed.
+  const query = useQuery({
+    queryKey: ['registrations', classId, status],
+    queryFn: () => api.registrations.list(classId, status),
+    staleTime: 0,
+    refetchInterval: 15_000,
+  });
   const actionable = query.data?.items.filter((item) => item.can_review) ?? []; const batch = actionable.slice(0, 100);
   const selectedIds = selected.filter((id) => actionable.some((row) => row.id === id));
   const mutation = useMutation({ mutationFn: ({ ids, decision }: { ids: string[]; decision: 'APPROVED'|'REJECTED' }) => api.registrations.review(classId, ids, decision, reason.trim() || undefined), onSuccess: (result) => {

@@ -136,6 +136,11 @@ async function run() {
     const signupPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
     watchPage(signupPage);
     const signupData = createFixtures('STUDENT'); signupData.registrations = [];
+    // Leave the teacher's empty list open before another session submits an application.
+    const registrationTeacherPage = await browser.newPage(); watchPage(registrationTeacherPage);
+    const registrationTeacher = createFixtures(); registrationTeacher.login(); registrationTeacher.registrations = signupData.registrations;
+    await installApi(registrationTeacherPage, registrationTeacher); await registrationTeacherPage.goto(`${baseUrl}/classes/class-1/registrations`);
+    await registrationTeacherPage.getByText('暂无匹配的注册申请').waitFor();
     await installApi(signupPage, signupData); await signupPage.goto(`${baseUrl}/register`);
     await signupPage.getByRole('heading', { name: '学生注册' }).waitFor();
     await signupPage.getByLabel('学号', { exact: true }).fill('009'); await signupPage.getByLabel('姓名', { exact: true }).fill('注册同学');
@@ -143,10 +148,7 @@ async function run() {
     await signupPage.getByLabel('设置密码', { exact: true }).fill('Student-password-123'); await signupPage.getByLabel('确认密码', { exact: true }).fill('Student-password-123');
     assert.equal(await signupPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'signup mobile overflow');
     await signupPage.getByRole('button', { name: '提交注册申请' }).click(); await signupPage.getByText(/申请已提交，等待任课老师/).waitFor();
-    const registrationTeacherPage = await browser.newPage(); watchPage(registrationTeacherPage);
-    const registrationTeacher = createFixtures(); registrationTeacher.login(); registrationTeacher.registrations = signupData.registrations;
-    await installApi(registrationTeacherPage, registrationTeacher); await registrationTeacherPage.goto(`${baseUrl}/classes/class-1/registrations`);
-    await registrationTeacherPage.getByRole('checkbox', { name: '选择注册同学的申请' }).check();
+    await registrationTeacherPage.getByRole('checkbox', { name: '选择注册同学的申请' }).check({ timeout: 20_000 });
     await registrationTeacherPage.getByRole('button', { name: '通过所选（1）' }).click(); await registrationTeacherPage.getByText('已处理 1 条注册申请').waitFor();
     assert.equal(signupData.registrations[0].status, 'APPROVED');
     await signupPage.getByRole('link', { name: '返回登录', exact: true }).click();
