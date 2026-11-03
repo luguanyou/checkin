@@ -69,6 +69,10 @@ class UpdateScoreItemRequest(ApiModel):
         return self
 
 
+class DeleteScoreItemRequest(ApiModel):
+    expected_version: int = Field(ge=0)
+
+
 class ScoreRecordInput(ApiModel):
     enrollment_id: str = Field(min_length=1, max_length=36)
     points: ScoreDecimal | None

@@ -8,7 +8,7 @@ import type { ScoreBook } from '../../api/scores-types';
 import { ToastProvider } from '../../components/ToastProvider';
 import { ScoresPage } from './ScoresPage';
 
-const api = { courses: { list: vi.fn() }, scores: { get: vi.fn(), saveRecords: vi.fn(), saveSettings: vi.fn(), history: vi.fn(), export: vi.fn(), createItem: vi.fn(), updateItem: vi.fn() } };
+const api = { courses: { list: vi.fn() }, scores: { get: vi.fn(), saveRecords: vi.fn(), saveSettings: vi.fn(), history: vi.fn(), export: vi.fn(), createItem: vi.fn(), updateItem: vi.fn(), deleteItem: vi.fn() } };
 vi.mock('../../app/auth', () => ({ useApi: () => api }));
 const book: ScoreBook = {
   class_group: { id: 'c1', name: '一班', status: 'ACTIVE' }, course: { id: 'course1', name: '软件工程', status: 'ACTIVE' }, version: 2, readonly: false, rules_ready: false,
@@ -91,7 +91,7 @@ describe('usual scores', () => {
   });
   it('locks an archived book but still allows summary and detail exports', async () => {
     const user = userEvent.setup(); api.scores.get.mockResolvedValue({ ...structuredClone(book), readonly: true }); mount();
-    expect(await screen.findByLabelText('张敏本次积分')).toBeDisabled(); expect(screen.getByRole('button', { name: '新建项目' })).toBeDisabled();
+    expect(await screen.findByLabelText('张敏本次积分')).toBeDisabled(); expect(screen.getByRole('button', { name: '新建项目' })).toBeDisabled(); expect(screen.getByRole('button', { name: '删除项目' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: '平时成绩汇总' }));
     expect(screen.getByRole('button', { name: '导出正式汇总' })).toBeDisabled(); expect(screen.getByRole('button', { name: '导出原始明细' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: '导出原始明细' })); await user.click(screen.getByLabelText('CSV 文本 (.csv)'));
@@ -175,4 +175,51 @@ it('lets zero be cleared and rounds points to one decimal with arrow increments 
   expect(input).toHaveValue(1.3);
   await user.click(screen.getByRole('button', { name: '保存本次录入' }));
   expect(api.scores.saveRecords).toHaveBeenCalledWith('c1', 'i1', { expected_version: 2, records: [{ enrollment_id: 'e1', points: '1.3', note: '' }] });
+});
+
+
+it('confirms deletion and selects the remaining project', async () => {
+  const user = userEvent.setup(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  api.scores.deleteItem.mockResolvedValue({ ...structuredClone(book), version: 3, items: [book.items[1]], records: [] });
+  mount(); await user.click(await screen.findByRole('button', { name: '删除项目' }));
+  expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/作业 1.*积分.*备注.*无法恢复/));
+  expect(api.scores.deleteItem).toHaveBeenCalledWith('c1', 'i1', { expected_version: 2 });
+  await waitFor(() => expect(screen.getByLabelText('当前项目')).toHaveValue('i2'));
+  confirm.mockRestore();
+});
+
+it('preserves the draft when deletion is cancelled or fails', async () => {
+  const user = userEvent.setup(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  mount(); fireEvent.change(await screen.findByLabelText('张敏本次积分'), { target: { value: '4' } });
+  await user.click(screen.getByRole('button', { name: '删除项目' }));
+  expect(api.scores.deleteItem).not.toHaveBeenCalled(); expect(screen.getByLabelText('张敏本次积分')).toHaveValue(4);
+  confirm.mockReturnValue(true); api.scores.deleteItem.mockRejectedValue(new Error('删除失败'));
+  await user.click(screen.getByRole('button', { name: '删除项目' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('删除失败');
+  expect(screen.getByLabelText('张敏本次积分')).toHaveValue(4); expect(screen.getByLabelText('当前项目')).toHaveValue('i1');
+  confirm.mockRestore();
+});
+
+it('shows the empty state after deleting the last project', async () => {
+  const user = userEvent.setup(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  api.scores.deleteItem.mockResolvedValue({ ...structuredClone(book), version: 3, items: [], records: [] });
+  mount(); await user.click(await screen.findByRole('button', { name: '删除项目' }));
+  expect(await screen.findByText('该类别还没有评分项目')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '删除项目' })).toBeDisabled(); confirm.mockRestore();
+});
+
+
+it('requires refresh and another confirmation after a delete version conflict', async () => {
+  const user = userEvent.setup(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  api.scores.deleteItem.mockRejectedValueOnce(new ApiError(409, 'SCORE_VERSION_CONFLICT', '成绩已更新'));
+  mount(); await user.click(await screen.findByRole('button', { name: '删除项目' }));
+  expect(await screen.findByRole('button', { name: '刷新并核对' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '删除项目' })).toBeDisabled();
+  api.scores.get.mockResolvedValue({ ...structuredClone(book), version: 3 });
+  await user.click(screen.getByRole('button', { name: '刷新并核对' }));
+  await user.click(await screen.findByRole('button', { name: '确认核对，继续保存' }));
+  api.scores.deleteItem.mockResolvedValue({ ...structuredClone(book), version: 4, items: [], records: [] });
+  await user.click(screen.getByRole('button', { name: '删除项目' }));
+  expect(api.scores.deleteItem).toHaveBeenLastCalledWith('c1', 'i1', { expected_version: 3 });
+  expect(confirm).toHaveBeenCalledTimes(2); confirm.mockRestore();
 });

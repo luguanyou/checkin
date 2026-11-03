@@ -11,6 +11,8 @@ describe('scores contracts', () => {
     expect(fetcher).toHaveBeenCalledWith('/api/v1/classes/c1/scores/items/i1/records', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ expected_version: 4, records }) }));
     await api.scores.saveSettings('c1', { expected_version: 5, base_score: '80', factors: { HOMEWORK: '0.5', LAB: '1', CLASSROOM: '1', OTHER: null } });
     expect(fetcher).toHaveBeenLastCalledWith('/api/v1/classes/c1/scores/settings', expect.objectContaining({ method: 'PUT' }));
+    await api.scores.deleteItem('c1', 'i1', { expected_version: 6 });
+    expect(fetcher).toHaveBeenLastCalledWith('/api/v1/classes/c1/scores/items/i1', expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ expected_version: 6 }) }));
     await api.scores.history('c1', 'e1');
     expect(fetcher).toHaveBeenLastCalledWith('/api/v1/classes/c1/scores/history?enrollment_id=e1', expect.anything());
     await api.scores.export('c1', 'xlsx', 'details');

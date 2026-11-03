@@ -1,4 +1,4 @@
-import { Pencil, Plus, Save, Search } from 'lucide-react';
+import { Pencil, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../api/client';
 import type { ScoreBook, ScoreCategory, ScoreItem, ScoreSettings, ScoreStudent } from '../../api/scores-types';
@@ -59,6 +59,16 @@ export function ScoreEditor({ book, onBook, onDirty }: { book: ScoreBook; onBook
     try { const updated = await api.scores.saveRecords(book.class_group.id, item.id, { expected_version: recordVersion, records }); onBook(updated); setSettingsDraft(null); setDrafts({}); toast.show('本次积分已保存'); }
     catch (reason) { failed(reason); } finally { setPending(false); }
   }
+  async function deleteItem() {
+    if (!item || locked || conflict) return;
+    const message = `确定删除项目“${item.name}”吗？该项目下所有学生的积分和备注将永久删除，平时成绩汇总将重新计算，删除后无法恢复。${dirty ? '当前未保存的修改也将丢弃。' : ''}`;
+    if (!window.confirm(message)) return;
+    setPending(true); setError('');
+    try {
+      const updated = await api.scores.deleteItem(book.class_group.id, item.id, { expected_version: book.version });
+      onBook(updated); discard(); setSelectedItemId(''); toast.show('项目已删除，成绩汇总已更新');
+    } catch (reason) { failed(reason); } finally { setPending(false); }
+  }
   async function saveSettings() {
     if (conflict || book.readonly) return;
     if (!validDecimal(settings.base_score ?? '') || Object.values(settings.factors).some((value) => !validDecimal(value ?? '', true))) { setError('基础分和系数最多四位小数，换算系数须为非负数。'); return; }
@@ -78,7 +88,7 @@ export function ScoreEditor({ book, onBook, onDirty }: { book: ScoreBook; onBook
     {error && <div className="form-alert" role="alert">{error}{conflict && <div className="actions"><button className="btn btn-secondary" disabled={pending} onClick={() => void refreshConflict()}>刷新并核对</button>{reloaded && <button className="btn btn-secondary" onClick={() => { setRecordVersion(book.version); setSettingsVersion(book.version); setConflict(false); setError(''); }}>确认核对，继续保存</button>}</div>}</div>}
     {tab === 'entry' && <>
       <div className="scores-categories">{categories.map((option) => <button key={option.key} className={`scores-category ${category === option.key ? 'selected' : ''}`} aria-pressed={category === option.key} disabled={pending} onClick={() => switchView(() => { setCategory(option.key); setSelectedItemId(''); })}><strong>{option.label}</strong><small>{book.items.filter((row) => row.category === option.key).length} 个项目 · {book.settings.factors[option.key] == null ? '系数待配置' : `1 积分 = ${book.settings.factors[option.key]} 分`}</small></button>)}</div>
-      <div className="scores-project-bar"><label className="field"><span>当前项目</span><select value={item?.id ?? ''} disabled={pending || !items.length} onChange={(e) => switchView(() => setSelectedItemId(e.target.value))}>{!items.length && <option value="">暂无项目</option>}{items.map((row) => <option value={row.id} key={row.id}>{row.name} · {row.occurred_on}</option>)}</select></label><div className="actions"><button className="btn btn-secondary" disabled={locked || conflict || !item} onClick={() => switchView(() => setItemDialog(item!))}><Pencil />编辑项目</button><button className="btn btn-primary" disabled={locked || conflict} onClick={() => switchView(() => setItemDialog('new'))}><Plus />新建项目</button></div></div>
+      <div className="scores-project-bar"><label className="field"><span>当前项目</span><select value={item?.id ?? ''} disabled={pending || !items.length} onChange={(e) => switchView(() => setSelectedItemId(e.target.value))}>{!items.length && <option value="">暂无项目</option>}{items.map((row) => <option value={row.id} key={row.id}>{row.name} · {row.occurred_on}</option>)}</select></label><div className="actions"><button className="btn btn-secondary" disabled={locked || conflict || !item} onClick={() => switchView(() => setItemDialog(item!))}><Pencil />编辑项目</button><button className="btn btn-danger" disabled={locked || conflict || !item} onClick={() => void deleteItem()}><Trash2 />删除项目</button><button className="btn btn-primary" disabled={locked || conflict} onClick={() => switchView(() => setItemDialog('new'))}><Plus />新建项目</button></div></div>
       {!item ? <EmptyState title="该类别还没有评分项目" description="创建作业、实验或表现事件项目，即可先记录积分，稍后设置换算规则。" /> : <>
         {item.description && <p className="form-note">{item.description}</p>}
         <p className="form-note">快捷评分为 1、2、3、4、5；也可输入正负小数，离开输入框时保留一位小数，上下键每次增减 1。待评价项目默认按 0 分计入汇总，仍保留待评价状态。</p>

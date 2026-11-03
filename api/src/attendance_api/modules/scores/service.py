@@ -3,11 +3,12 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Literal, cast
 
-from sqlalchemy import select, true
+from sqlalchemy import delete, select, true
 from sqlalchemy.orm import Session
 
 from attendance_api.errors import ApiError
 from attendance_api.models import AuditLog, ClassGroup, Course, Enrollment, Student, User
+from attendance_api.models.monitors import MonitorGrant
 from attendance_api.models.scores import ScoreItem, ScoreRecord, ScoreSettings
 from attendance_api.modules.attendance.service import _iso_timestamp
 from attendance_api.modules.audit.service import append_audit
@@ -211,6 +212,7 @@ ScoreMutation = (
     | schema.CreateScoreItemRequest
     | schema.UpdateScoreItemRequest
     | schema.SetScoreRecordsRequest
+    | schema.DeleteScoreItemRequest
 )
 
 
@@ -296,6 +298,18 @@ def mutate_book(
                     if key != "expected_version":
                         setattr(item, key, value)
                 audit("SCORE_ITEM_UPDATED", before, _item_response(item).model_dump(mode="json"))
+            elif isinstance(payload, schema.DeleteScoreItemRequest):
+                before = _item_response(item).model_dump(mode="json")
+                records = db.scalars(
+                    select(ScoreRecord).where(ScoreRecord.item_id == item.id).with_for_update()
+                ).all()
+                before["records"] = [
+                    _record_response(record).model_dump(mode="json") for record in records
+                ]
+                db.execute(delete(ScoreRecord).where(ScoreRecord.item_id == item.id))
+                db.execute(delete(MonitorGrant).where(MonitorGrant.item_id == item.id))
+                db.delete(item)
+                audit("SCORE_ITEM_DELETED", before, {"item_id": item.id, "deleted": True})
             else:
                 _save_records(db, class_group_id, item, payload, audit)
         db.flush()

@@ -16,7 +16,7 @@
 
 ## 页面
 
-独立入口 `/scores`，课程班级快捷入口 `/scores?course_id=...&class_group_id=...`。页面支持课程、班级选择；项目录入、基础分与换算、成绩汇总三个页签。使用当前组件、绿色主题与响应式表格。项目可新建、编辑；已有项目保留，避免误删历史。
+独立入口 `/scores`，课程班级快捷入口 `/scores?course_id=...&class_group_id=...`。页面支持课程、班级选择；项目录入、基础分与换算、成绩汇总三个页签。使用当前组件、绿色主题与响应式表格。项目可新建、编辑、删除。删除前确认将永久移除该项目下的学生积分及备注，删除后重算汇总，保留审计记录；归档课程和班级禁止删除。
 
 项目录入支持按分类选项目、全班快捷打分、备注及批量保存；切换班级、项目和离开前提示未保存修改。修改失败保留输入并提示重试；版本冲突需刷新并重新核对，禁止静默覆盖。
 
@@ -34,6 +34,7 @@
 | PUT /settings | expected_version, base_score, factors | ScoreBook |
 | POST /items | expected_version, category, name, occurred_on, description | ScoreBook，201 |
 | PATCH /items/{item_id} | expected_version, name, occurred_on, description | ScoreBook |
+| DELETE /items/{item_id} | expected_version | ScoreBook |
 | PUT /items/{item_id}/records | expected_version, records: [{enrollment_id, points, note}] | ScoreBook |
 | GET /history | enrollment_id 可选 | {items: ScoreHistory[]} |
 | GET /export | format=csv或xlsx，kind=summary或details | 下载文件 |

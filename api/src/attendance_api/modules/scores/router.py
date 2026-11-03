@@ -13,6 +13,7 @@ from attendance_api.modules.scores import service
 from attendance_api.modules.scores.export import generate_export
 from attendance_api.schemas.scores import (
     CreateScoreItemRequest,
+    DeleteScoreItemRequest,
     ScoreBook,
     ScoreHistoryResponse,
     SetScoreRecordsRequest,
@@ -81,6 +82,18 @@ def update_score_item(
     class_group_id: str,
     item_id: str,
     payload: UpdateScoreItemRequest,
+    request: Request,
+    db: Database,
+    teacher: Teacher,
+) -> ScoreBook:
+    return _mutate(class_group_id, payload, request, db, teacher, item_id)
+
+
+@router.delete("/items/{item_id}", response_model=ScoreBook, operation_id="deleteScoreItem")
+def delete_score_item(
+    class_group_id: str,
+    item_id: str,
+    payload: DeleteScoreItemRequest,
     request: Request,
     db: Database,
     teacher: Teacher,

@@ -14,6 +14,7 @@ from attendance_api.models import (
     ClassGroup,
     Course,
     Enrollment,
+    MonitorGrant,
     ScoreItem,
     ScoreRecord,
     ScoreSettings,
@@ -341,6 +342,11 @@ def test_item_update_and_cross_class_isolation(scores, db_session) -> None:
         f"{other_url}/items/{item_id}", json={"expected_version": 0, "name": "越界"}
     )
     assert response.status_code == 404
+    response = client.request(
+        "DELETE", f"{other_url}/items/{item_id}", json={"expected_version": 0}
+    )
+    assert response.status_code == 404
+    assert client.get(other_url).json()["version"] == 0
     other_book = add_item(client, other_url)
     other_item = other_book["items"][0]["id"]
     response = client.put(
@@ -367,6 +373,7 @@ def test_item_update_and_cross_class_isolation(scores, db_session) -> None:
 
 def test_other_teacher_and_admin_cannot_access_scores(scores, db_session) -> None:
     client, url, _ = scores
+    item_id = add_item(client, url)["items"][0]["id"]
     for role, status in [("TEACHER", 404), ("ADMIN", 403)]:
         user = User(
             username=f"foreign-{uuid4()}",
@@ -388,6 +395,10 @@ def test_other_teacher_and_admin_cannot_access_scores(scores, db_session) -> Non
         client.headers["Authorization"] = f"Bearer {token}"
         for suffix in ["", "/history", "/export?format=csv&kind=details"]:
             assert client.get(url + suffix).status_code == status
+        response = client.request(
+            "DELETE", f"{url}/items/{item_id}", json={"expected_version": 1}
+        )
+        assert response.status_code == status
 
 
 def test_export_pending_rows_and_formula_injection(scores, db_session) -> None:
@@ -485,3 +496,48 @@ def test_raw_export_retains_four_decimal_places(scores) -> None:
     workbook = load_workbook(BytesIO(client.get(url + "/export?format=xlsx&kind=details").content))
     assert any(row[8].value == "0.0001" for row in list(workbook.active)[1:])
     workbook.close()
+
+
+def test_delete_project_cleans_records_recalculates_and_keeps_audit(scores, db_session):
+    client, url, ids = scores
+    book = add_item(client, url, default_points="3")
+    item_id = book["items"][0]["id"]
+    set_rules(client, url, 1)
+    teacher = db_session.get(Course, book["course"]["id"]).owner_teacher_id
+    grant = MonitorGrant(user_id=teacher, granted_by=teacher, item_id=item_id)
+    db_session.add(grant)
+    db_session.commit()
+    response = client.request("DELETE", f"{url}/items/{item_id}", json={"expected_version": 2})
+    assert response.status_code == 200, response.text
+    book = response.json()
+    assert book["version"] == 3
+    assert book["items"] == [] and book["records"] == []
+    assert all(row["final_score"] == "70.00" for row in book["summaries"])
+    assert db_session.scalar(
+        select(func.count()).select_from(ScoreRecord).where(ScoreRecord.item_id == item_id)
+    ) == 0
+    assert db_session.scalar(
+        select(func.count()).select_from(MonitorGrant).where(MonitorGrant.item_id == item_id)
+    ) == 0
+    history = client.get(url + "/history").json()["items"]
+    deleted = next(row for row in history if row["action"] == "SCORE_ITEM_DELETED")
+    assert deleted["before_value"]["id"] == item_id
+    assert len(deleted["before_value"]["records"]) == len(ids)
+    response = client.request("DELETE", f"{url}/items/{item_id}", json={"expected_version": 3})
+    assert response.status_code == 404
+    assert client.get(url).json()["version"] == 3
+
+
+def test_delete_project_rejects_stale_version_and_archived_class(scores, db_session):
+    client, url, _ = scores
+    book = add_item(client, url)
+    item_id = book["items"][0]["id"]
+    response = client.request("DELETE", f"{url}/items/{item_id}", json={"expected_version": 0})
+    assert response.status_code == 409
+    assert client.get(url).json()["version"] == 1
+    group = db_session.get(ClassGroup, book["class_group"]["id"])
+    group.status = "ARCHIVED"
+    db_session.commit()
+    response = client.request("DELETE", f"{url}/items/{item_id}", json={"expected_version": 1})
+    assert response.status_code == 409
+    assert len(client.get(url).json()["records"]) == 2
