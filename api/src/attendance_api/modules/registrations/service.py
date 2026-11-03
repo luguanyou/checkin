@@ -1,9 +1,10 @@
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from attendance_api.errors import ApiError
 from attendance_api.models import (
@@ -103,7 +104,7 @@ def require_reviewer(db: Session, *, actor: User, class_id: str) -> ClassGroup:
     ).one_or_none()
     if row is None:
         raise ApiError(404, "RESOURCE_NOT_FOUND", "班级不存在")
-    group, course = row
+    group, course = row._tuple()
     if actor.role == "TEACHER":
         if course.owner_teacher_id != actor.id:
             raise ApiError(404, "RESOURCE_NOT_FOUND", "班级不存在")
@@ -140,7 +141,7 @@ def list_applications(
         Student, Student.id == StudentRegistration.student_id
     )
     query = query.outerjoin(User, User.id == StudentRegistration.reviewed_by).where(
-        StudentRegistration.class_group_id == class_id
+        application_scope(actor=actor, class_id=class_id)
     )
     if status != "all":
         query = query.where(StudentRegistration.status == status)
@@ -158,7 +159,7 @@ def list_applications(
     history: dict[str, list[dict[str, Any]]] = {}
     for event, actor_name in events:
         value = event.after_value or {}
-        if value.get("class_id") == class_id:
+        if actor.role == "TEACHER" or value.get("class_id") == class_id:
             history.setdefault(str(value.get("student_id")), []).append(
                 {
                     "reviewer_name": actor_name,
@@ -184,6 +185,28 @@ def list_applications(
     ]
 
 
+def application_scope(*, actor: User, class_id: str) -> ColumnElement[bool]:
+    """Account registration follows the student across teachers' active rosters.
+
+    Call only after require_reviewer has authorized the requested class. Monitor
+    grants remain limited to applications submitted through their specific class.
+    Keep source-class applications visible even after removal for review history.
+    """
+    submitted_here = StudentRegistration.class_group_id == class_id
+    if actor.role != "TEACHER":
+        return submitted_here
+    enrolled_here = (
+        select(Enrollment.id)
+        .where(
+            Enrollment.student_id == StudentRegistration.student_id,
+            Enrollment.class_group_id == class_id,
+            Enrollment.status == "ACTIVE",
+        )
+        .exists()
+    )
+    return or_(submitted_here, enrolled_here)
+
+
 def review(
     db: Session,
     *,
@@ -200,7 +223,7 @@ def review(
     rows = db.execute(
         select(StudentRegistration, Student)
         .join(Student, Student.id == StudentRegistration.student_id)
-        .where(StudentRegistration.id.in_(ids), StudentRegistration.class_group_id == class_id)
+        .where(StudentRegistration.id.in_(ids), application_scope(actor=actor, class_id=class_id))
         .order_by(StudentRegistration.id)
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -259,7 +282,8 @@ def review(
                 after_value={
                     "status": decision,
                     "student_id": student.id,
-                    "class_id": class_id,
+                    "class_id": application.class_group_id,
+                    "review_class_id": class_id,
                     "reason": application.review_reason,
                 },
                 reason=application.review_reason,

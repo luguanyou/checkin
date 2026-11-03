@@ -71,6 +71,176 @@ def request_registration(client, group, student, password="Registration-pass-123
     )
 
 
+@pytest.fixture
+def second_teacher_class(portal_context):
+    from attendance_api.models import ClassGroup, Course
+
+    db, teacher, user, group, other = portal_context
+    second = User(
+        username="second",
+        display_name="Second Teacher",
+        password_hash="test",
+        role="TEACHER",
+        must_change_password=False,
+    )
+    db.add(second)
+    db.flush()
+    course = Course(owner_teacher_id=second.id, name="Second Course", code="C2", term="2026")
+    db.add(course)
+    db.flush()
+    shared = ClassGroup(course_id=course.id, name=group.name)
+    db.add(shared)
+    db.commit()
+    return second, shared
+
+
+@pytest.mark.parametrize("decision", ["APPROVED", "REJECTED"])
+def test_teachers_share_roster_student_applications_and_history(
+    portal_context, portal_client, applicant, second_teacher_class, decision
+):
+    from attendance_api.models import AuditLog, StudentRegistration
+
+    db, teacher, user, group, other = portal_context
+    second, shared = second_teacher_class
+    client, app = portal_client
+    db.add(Enrollment(class_group_id=shared.id, student_id=applicant.id))
+    db.commit()
+    assert request_registration(client, group, applicant).status_code == 201
+    app.dependency_overrides[get_current_user] = lambda: second
+    url = f"/api/v1/classes/{shared.id}/registrations"
+    pending = client.get(url)
+    assert pending.status_code == 200
+    assert len(pending.json()["items"]) == 1
+    item = pending.json()["items"][0]
+    assert item["can_review"]
+    payload = {"registration_ids": [item["id"]], "decision": decision, "reason": "核验完成"}
+    assert client.post(f"{url}/review", json=payload).status_code == 200
+    assert client.get(url).json()["items"] == []
+    reviewed = client.get(url, params={"status": "all"}).json()["items"][0]
+    assert reviewed["reviewer_name"] == second.display_name
+    assert reviewed["history"][0]["reviewer_name"] == second.display_name
+    registration = db.get(StudentRegistration, item["id"])
+    assert registration.class_group_id == group.id
+    event = db.scalar(select(AuditLog).where(AuditLog.action == "REGISTRATION_REVIEWED"))
+    assert event.after_value["class_id"] == group.id
+    assert event.after_value["review_class_id"] == shared.id
+    app.dependency_overrides[get_current_user] = lambda: teacher
+    source_url = f"/api/v1/classes/{group.id}/registrations"
+    source = client.get(source_url, params={"status": "all"}).json()["items"][0]
+    assert source["history"] == reviewed["history"]
+    assert client.post(f"{source_url}/review", json=payload).status_code == 409
+    account = db.scalar(select(User).where(User.student_id == applicant.id))
+    assert (account is not None) == (decision == "APPROVED")
+
+
+@pytest.mark.parametrize("membership", ["missing", "removed", "active"])
+def test_shared_review_requires_own_class_and_active_roster(
+    portal_context, portal_client, applicant, second_teacher_class, membership
+):
+    from attendance_api.models import StudentRegistration
+
+    db, teacher, user, group, other = portal_context
+    second, shared = second_teacher_class
+    client, app = portal_client
+    if membership != "missing":
+        db.add(
+            Enrollment(
+                class_group_id=shared.id,
+                student_id=applicant.id,
+                status="REMOVED" if membership == "removed" else "ACTIVE",
+            )
+        )
+        db.commit()
+    assert request_registration(client, group, applicant).status_code == 201
+    registration = db.scalar(select(StudentRegistration))
+    app.dependency_overrides[get_current_user] = lambda: second
+    assert client.get(f"/api/v1/classes/{group.id}/registrations").status_code == 404
+    url = f"/api/v1/classes/{shared.id}/registrations"
+    items = client.get(url).json()["items"]
+    assert len(items) == (1 if membership == "active" else 0)
+    payload = {"registration_ids": [registration.id], "decision": "APPROVED"}
+    if membership == "active":
+        shared.status = "ARCHIVED"
+        db.commit()
+    assert client.post(f"{url}/review", json=payload).status_code == (
+        409 if membership == "active" else 404
+    )
+    assert registration.status == "PENDING"
+
+
+def test_shared_batch_cannot_include_students_outside_teacher_roster(
+    portal_context, portal_client, applicant, second_teacher_class
+):
+    from attendance_api.models import StudentRegistration
+
+    db, teacher, user, group, other = portal_context
+    second, shared = second_teacher_class
+    client, app = portal_client
+    outsider = Student(student_number="011", name="Outside roster")
+    db.add(outsider)
+    db.flush()
+    db.add_all(
+        [
+            Enrollment(class_group_id=group.id, student_id=outsider.id),
+            Enrollment(class_group_id=shared.id, student_id=applicant.id),
+        ]
+    )
+    db.commit()
+    assert request_registration(client, group, applicant).status_code == 201
+    assert request_registration(client, group, outsider).status_code == 201
+    registrations = list(db.scalars(select(StudentRegistration)))
+    app.dependency_overrides[get_current_user] = lambda: second
+    url = f"/api/v1/classes/{shared.id}/registrations"
+    items = client.get(url).json()["items"]
+    assert [item["student_number"] for item in items] == [applicant.student_number]
+    response = client.post(
+        f"{url}/review",
+        json={
+            "registration_ids": [item.id for item in registrations],
+            "decision": "APPROVED",
+        },
+    )
+    assert response.status_code == 404
+    for registration in registrations:
+        db.refresh(registration)
+        assert registration.status == "PENDING"
+        assert db.scalar(select(User).where(User.student_id == registration.student_id)) is None
+
+
+def test_monitor_grant_does_not_expand_to_other_courses_applications(
+    portal_context, portal_client, applicant, second_teacher_class
+):
+    from attendance_api.models import RegistrationReviewer, StudentRegistration
+
+    db, teacher, user, group, other = portal_context
+    second, shared = second_teacher_class
+    client, app = portal_client
+    db.add_all(
+        [
+            Enrollment(class_group_id=shared.id, student_id=applicant.id),
+            RegistrationReviewer(class_group_id=group.id, user_id=user.id, granted_by=teacher.id),
+        ]
+    )
+    db.commit()
+    assert request_registration(client, shared, applicant).status_code == 201
+    registration = db.scalar(select(StudentRegistration))
+    url = f"/api/v1/classes/{group.id}/registrations"
+    assert client.get(url).json()["items"] == []
+    assert (
+        client.post(
+            f"{url}/review",
+            json={
+                "registration_ids": [registration.id],
+                "decision": "APPROVED",
+            },
+        ).status_code
+        == 404
+    )
+    # The teacher of this same roster can review the student's global account.
+    app.dependency_overrides[get_current_user] = lambda: teacher
+    assert len(client.get(url).json()["items"]) == 1
+
+
 def test_monitor_review_permission_is_separate_revocable_and_scoped(
     portal_context, portal_client, applicant
 ):
