@@ -1,0 +1,47 @@
+.teaching-panel {
+  margin-top: 20px;
+}
+
+.teaching-list {
+  padding: 0 16px;
+}
+
+.teaching-chapter {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.teaching-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.teaching-item h3,
+.teaching-item h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.teaching-list > div:last-child > .teaching-item:last-child {
+  border-bottom: 0;
+}
+
+.teaching-item p {
+  margin: 6px 0;
+}
+
+.teaching-description {
+  white-space: pre-wrap;
+}
+
+.teaching-empty {
+  margin: 16px;
+  color: var(--muted);
+}
+
+.teaching-reference {
+  color: var(--present);
+  text-decoration: underline;
+}

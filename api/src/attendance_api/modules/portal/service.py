@@ -59,7 +59,9 @@ def student_classes(db: Session, user: User) -> list[dict[str, Any]]:
     ]
 
 
-def student_class_data(db: Session, *, user: User, class_id: str) -> dict[str, Any]:
+def get_enrolled_class(
+    db: Session, *, user: User, class_id: str
+) -> tuple[Enrollment, ClassGroup, Course]:
     row = db.execute(
         select(Enrollment, ClassGroup, Course)
         .join(ClassGroup, ClassGroup.id == Enrollment.class_group_id)
@@ -72,7 +74,11 @@ def student_class_data(db: Session, *, user: User, class_id: str) -> dict[str, A
     ).one_or_none()
     if row is None:
         raise ApiError(404, "RESOURCE_NOT_FOUND", "班级不存在或已不在名单中")
-    enrollment, group, course = row
+    return row[0], row[1], row[2]
+
+
+def student_class_data(db: Session, *, user: User, class_id: str) -> dict[str, Any]:
+    enrollment, group, course = get_enrolled_class(db, user=user, class_id=class_id)
     result: dict[str, Any] = {
         **visibility(group),
         "attendance": None,

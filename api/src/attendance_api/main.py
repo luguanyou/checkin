@@ -36,6 +36,7 @@ from attendance_api.modules.registrations.router import router as registrations_
 from attendance_api.modules.rosters.router import enrollments_router
 from attendance_api.modules.rosters.router import router as rosters_router
 from attendance_api.modules.scores.router import router as scores_router
+from attendance_api.modules.teaching_content.router import router as teaching_content_router
 from attendance_api.modules.tts.router import router as tts_router
 from attendance_api.modules.users.router import router as users_router
 from attendance_api.schemas.common import ErrorResponse
@@ -55,6 +56,7 @@ OPENAPI_TAGS = [
     {"name": "attendance", "description": "考勤场次与记录"},
     {"name": "exports", "description": "考勤导出"},
     {"name": "scores", "description": "平时成绩、表现积分与导出"},
+    {"name": "teaching-content", "description": "课程资料与作业发布"},
 ]
 
 
@@ -124,6 +126,7 @@ def create_app() -> FastAPI:
     app.include_router(portal_router)
     app.include_router(monitors_router)
     app.include_router(registrations_router)
+    app.include_router(teaching_content_router)
     return app
 
 

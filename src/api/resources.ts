@@ -18,6 +18,7 @@ import type {
   UserStatus,
 } from './types';
 import { ApiClient } from './client';
+import type { TeacherTeachingContent, TeacherTeachingContentList, TeachingContent, TeachingContentInput } from './teaching-content-types';
 import type { RegistrationApplication, RegistrationClass, StudentRegistrationInput } from './registration-types';
 import type { MonitorManagement, MonitorProject, MonitorProjectOption, MonitorSaveInput } from './monitor-types';
 import type { StudentVisibility, StudentClass, StudentClassData } from './portal-types';
@@ -38,6 +39,19 @@ function json(method: string, body?: unknown): RequestInit {
 
 export function createApi(client: ApiClient) {
   return {
+    teachingContent: {
+      list: (classId: string) => client.request<TeacherTeachingContentList>(`/classes/${classId}/teaching-content`),
+      studentList: (classId: string) => client.request<{ items: TeachingContent[] }>(`/student/classes/${classId}/teaching-content`, { cache: 'no-store' }),
+      save: (classId: string, itemId: string | undefined, input: TeachingContentInput, file: File | null) => {
+        const body = new FormData();
+        body.set('payload', JSON.stringify(input));
+        if (file) body.set('file', file);
+        const path = `/classes/${classId}/teaching-content`;
+        return client.request<TeacherTeachingContent>(itemId ? `${path}/${itemId}` : path, { method: itemId ? 'PUT' : 'POST', body });
+      },
+      withdraw: (classId: string, itemId: string) => client.request<void>(`/classes/${classId}/teaching-content/${itemId}`, { method: 'DELETE' }),
+      download: (classId: string, itemId: string, student: boolean) => client.download(`${student ? '/student' : ''}/classes/${classId}/teaching-content/${itemId}/attachment`),
+    },
     registrations: {
       lookup: (student_number: string, name: string) => client.request<{ items: RegistrationClass[] }>('/auth/student-registration/classes', json('POST', { student_number, name }), false),
       register: (input: StudentRegistrationInput) => client.request<{ status: string; message: string }>('/auth/student-register', json('POST', input), false),

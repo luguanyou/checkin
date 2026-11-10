@@ -15,6 +15,8 @@ from attendance_api.models import (
     ScoreItem,
     ScoreRecord,
     ScoreSettings,
+    TeachingContent,
+    TeachingPublication,
     User,
 )
 from attendance_api.modules.audit.service import append_audit
@@ -342,6 +344,13 @@ def delete_class_group(
     class_group, _course = get_owned_class_group(
         db, teacher_id=teacher.id, class_group_id=class_group_id
     )
+    # Use the same course lock as publishing so a class cannot be deleted mid-publication.
+    db.scalar(select(Course.id).where(Course.id == class_group.course_id).with_for_update())
+    content_ids = list(db.scalars(
+        select(TeachingPublication.content_id)
+        .where(TeachingPublication.class_id == class_group.id)
+        .with_for_update()
+    ))
     enrollment_count = (
         db.scalar(
             select(func.count())
@@ -395,8 +404,9 @@ def delete_class_group(
         or preview_count
         or score_item_count
         or score_settings_count
+        or content_ids
     ) and not delete_related_data:
-        raise _resource_state_error("班级存在名单、考勤或平时成绩数据，无法删除")
+        raise _resource_state_error("班级存在关联数据，无法删除")
     record_count = 0
     if delete_related_data:
         db.execute(delete(ScoreRecord).where(ScoreRecord.item_id.in_(score_ids)))
@@ -419,6 +429,16 @@ def delete_class_group(
         )
         db.execute(delete(ImportPreview).where(ImportPreview.class_group_id == class_group.id))
         db.execute(delete(Enrollment).where(Enrollment.class_group_id == class_group.id))
+        if content_ids:
+            db.execute(delete(TeachingPublication).where(
+                TeachingPublication.class_id == class_group.id
+            ))
+            other_publications = select(TeachingPublication.content_id).where(
+                TeachingPublication.content_id == TeachingContent.id
+            )
+            db.execute(delete(TeachingContent).where(
+                TeachingContent.id.in_(content_ids), ~other_publications.exists()
+            ))
     append_audit(
         db,
         actor_user_id=teacher.id,
@@ -437,6 +457,7 @@ def delete_class_group(
                 "score_records": score_record_count,
                 "score_items": score_item_count,
                 "score_settings": score_settings_count,
+                "teaching_publications": len(content_ids),
             },
         },
         after_value=None,

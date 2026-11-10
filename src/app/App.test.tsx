@@ -177,7 +177,7 @@ it('routes a student away from teacher pages into their own portal', async () =>
   });
   vi.stubGlobal('fetch', fetcher);
   render(<App />);
-  expect(await screen.findByRole('heading', { name: '我的考勤与平时分' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '我的课程' })).toBeInTheDocument();
   expect(window.location.pathname).toBe('/student');
   expect(fetcher.mock.calls.every(([url]) => /auth\/refresh|student\/classes/.test(String(url)))).toBe(true);
   vi.unstubAllGlobals(); queryClient.clear(); window.history.replaceState({}, '', '/');

@@ -77,6 +77,7 @@ async function installApi(page, data) {
       return json(data.visibility);
     }
     if (endpoint === '/api/v1/student/classes') return json({ items: [{ id: 'class-1', name: '一班', course_name: '设计', term: '2026', can_record_scores: data.monitorGrants.length > 0, can_review_registrations: Boolean(data.canReview), ...data.visibility }] });
+    if (endpoint === '/api/v1/student/classes/class-1/teaching-content') return json({ items: [] });
     if (endpoint === '/api/v1/student/classes/class-1') return json({ ...data.visibility,
       attendance: data.visibility.attendance_visible ? [{ id: 'a1', date: '2026-11-02', status: 'present', session_status: 'COMPLETED' }] : null,
       score: data.visibility.score_visibility === 'HIDDEN' ? null : { final_score: '75.2', status: 'READY' }, details: null,
@@ -153,13 +154,13 @@ async function run() {
     assert.equal(signupData.registrations[0].status, 'APPROVED');
     await signupPage.getByRole('link', { name: '返回登录', exact: true }).click();
     await signupPage.getByLabel('用户名', { exact: true }).fill('009'); await signupPage.getByLabel('密码', { exact: true }).fill('Student-password-123');
-    await signupPage.getByRole('button', { name: '登录', exact: true }).click(); await signupPage.getByRole('heading', { name: '我的考勤与平时分' }).waitFor();
+    await signupPage.getByRole('button', { name: '登录', exact: true }).click(); await signupPage.getByRole('heading', { name: '我的课程' }).waitFor();
     await signupPage.close(); await registrationTeacherPage.close();
     const studentPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
     watchPage(studentPage);
     const studentData = createFixtures('STUDENT'); studentData.login(); studentData.monitorGrants = ['mi1']; studentData.canReview = true; studentData.registrations = [{ id: 'monitor-review', name: '班长审核同学', student_number: '010', status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true }];
     await installApi(studentPage, studentData); await studentPage.goto(`${baseUrl}/scores`);
-    await studentPage.getByRole('heading', { name: '我的考勤与平时分' }).waitFor();
+    await studentPage.getByRole('heading', { name: '我的课程' }).waitFor();
     assert.equal(new URL(studentPage.url()).pathname, '/student');
     await studentPage.getByText('老师暂未开放考勤查看').waitFor();
     await studentPage.getByText('老师暂未开放平时分查看').waitFor();

@@ -7,7 +7,8 @@ import { StudentVisibilityDialog } from './TeacherPortalDialogs';
 import { ToastProvider } from '../../components/ToastProvider';
 
 const portal = { classes: vi.fn(), get: vi.fn(), visibility: vi.fn(), setVisibility: vi.fn() };
-vi.mock('../../app/auth', () => ({ useApi: () => ({ portal }), useAuth: () => ({ user: { id: 'u1', display_name: '小明', username: '001' }, logout: vi.fn() }) }));
+const teachingContent = { studentList: vi.fn() };
+vi.mock('../../app/auth', () => ({ useApi: () => ({ portal, teachingContent }), useAuth: () => ({ user: { id: 'u1', display_name: '小明', username: '001' }, logout: vi.fn() }) }));
 function mount(children: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider>{children}</ToastProvider></QueryClientProvider>);
 }
@@ -15,6 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   portal.classes.mockResolvedValue({ items: [{ id: 'c1', name: '一班', course_name: '设计', term: '2026', attendance_visible: false, score_visibility: 'HIDDEN' }] });
   portal.get.mockResolvedValue({ attendance_visible: false, score_visibility: 'HIDDEN', attendance: null, score: null, details: null });
+  teachingContent.studentList.mockResolvedValue({ items: [] });
 });
 it('explains closed visibility without showing grades or attendance', async () => {
   mount(<StudentPortalPage />);

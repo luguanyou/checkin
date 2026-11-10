@@ -14,6 +14,7 @@ import { RecordsPage } from '../features/records/RecordsPage';
 import { RecordDetailPage } from '../features/records/RecordDetailPage';
 import { AdminPage } from '../features/admin/AdminPage';
 import { ScoresPage } from '../features/scores/ScoresPage';
+import { TeachingContentPage } from '../features/teaching-content/TeachingContentPage';
 import type { UserRole } from '../api/types';
 import { useAuth } from './auth';
 
@@ -60,6 +61,7 @@ export function AppRoutes() {
           <Route path="courses" element={<CoursesPage />} />
           <Route path="classes/:classId/registrations" element={<RegistrationReviewPage />} />
           <Route path="classes/:classId/roster" element={<RosterPage />} />
+          <Route path="classes/:classId/teaching-content" element={<TeachingContentPage />} />
           <Route path="records" element={<RecordsPage />} />
           <Route path="scores" element={<ScoresPage />} />
           <Route path="records/:sessionId" element={<RecordDetailPage />} />
