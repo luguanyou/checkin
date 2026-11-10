@@ -25,7 +25,7 @@ type AdminDialog =
   | { kind: 'create'; password: string }
   | { kind: 'status'; user: User }
   | { kind: 'reset'; user: User; password: string }
-  | { kind: 'credentials'; displayName: string; username: string; password: string }
+  | { kind: 'credentials'; account: User; password: string }
   | null;
 
 function normalizedPage(raw: string | null) {
@@ -61,6 +61,7 @@ export function AdminPage() {
     q: q || undefined,
     status,
   };
+  const isStudentList = listParams.role === 'STUDENT';
 
   const list = useQuery({
     queryKey: ['admin-users', listParams],
@@ -92,8 +93,7 @@ export function AdminPage() {
       await refreshUsers();
       setDialog({
         kind: 'credentials',
-        displayName: created.display_name,
-        username: created.username,
+        account: created,
         password: input.temporary_password,
       });
     },
@@ -116,8 +116,7 @@ export function AdminPage() {
       await refreshUsers();
       setDialog({
         kind: 'credentials',
-        displayName: account.display_name,
-        username: account.username,
+        account,
         password,
       });
     },
@@ -125,6 +124,10 @@ export function AdminPage() {
 
   function updateParam(key: 'q' | 'status' | 'page' | 'role', value: string) {
     const next = new URLSearchParams(params);
+    if (key === 'role') {
+      next.delete('q');
+      next.delete('status');
+    }
     if (value) next.set(key, value);
     else next.delete(key);
     if (key !== 'page') next.set('page', '1');
@@ -144,26 +147,30 @@ export function AdminPage() {
       <div className="admin-page-header">
         <div className="admin-identity">
           <span className="admin-shield" aria-hidden="true"><ShieldCheck /></span>
-          <div><p className="eyebrow">系统管理</p><h1 id="admin-title">{listParams.role === 'STUDENT' ? '学生账号' : '教师账号'}</h1><p>维护账号登录资格，学生账号由任课老师在班级名单中开通。</p></div>
+          <div><p className="eyebrow">系统管理</p><h1 id="admin-title">{isStudentList ? '学生账号' : '教师账号'}</h1><p>{isStudentList ? '按学号或姓名查找已开通的账号，为学生重置密码。' : '维护教师的登录资格和密码。'}</p></div>
         </div>
-        <button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>
+        {!isStudentList && <button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>}
       </div>
 
+      <div className="toolbar" role="group" aria-label="账号类型">
+        <button type="button" className={`btn ${isStudentList ? 'btn-secondary' : 'btn-primary'}`} aria-pressed={!isStudentList} onClick={() => updateParam('role', 'TEACHER')}>教师账号</button>
+        <button type="button" className={`btn ${isStudentList ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={isStudentList} onClick={() => updateParam('role', 'STUDENT')}>学生账号</button>
+      </div>
       <div className="metrics-grid admin-summary" aria-label={listParams.role === 'STUDENT' ? '学生账号统计' : '教师账号统计'}>
         <article className="metric" aria-label={listParams.role === 'STUDENT' ? '学生账号总数' : '教师账号总数'}><UserRound aria-hidden="true" /><span>账号总数</span><strong>{allCount.data?.total ?? '-'}</strong></article>
         <article className="metric" aria-label={listParams.role === 'STUDENT' ? '启用学生数' : '启用教师数'}><UserCheck aria-hidden="true" /><span>已启用</span><strong>{activeCount.data?.total ?? '-'}</strong></article>
         <article className="metric" aria-label={listParams.role === 'STUDENT' ? '停用学生数' : '停用教师数'}><UserX aria-hidden="true" /><span>已停用</span><strong>{disabledCount.data?.total ?? '-'}</strong></article>
       </div>
 
-      <div className="toolbar admin-toolbar"><label><span className="sr-only">账号类型</span><select aria-label="账号类型" value={listParams.role} onChange={(e) => updateParam('role', e.target.value)}><option value="TEACHER">教师账号</option><option value="STUDENT">学生账号</option></select></label>
-        <label className="search-field"><span>{listParams.role === 'STUDENT' ? '搜索学生' : '搜索教师'}</span><Search aria-hidden="true" /><input value={q} onChange={(event) => updateParam('q', event.target.value)} placeholder="输入姓名或用户名" /></label>
+      <div className="toolbar admin-toolbar">
+        <label className="search-field"><span>{isStudentList ? '搜索学生' : '搜索教师'}</span><Search aria-hidden="true" /><input value={q} onChange={(event) => updateParam('q', event.target.value)} placeholder={isStudentList ? '输入学号或姓名' : '输入姓名或用户名'} /></label>
         <label><span>账号状态</span><select value={status ?? ''} onChange={(event) => updateParam('status', event.target.value)}><option value="">全部状态</option><option value="ACTIVE">已启用</option><option value="DISABLED">已停用</option></select></label>
       </div>
 
-      {list.isLoading ? <LoadingState label="正在加载账号..." /> : list.error ? <ErrorState message={list.error.message} retry={() => void list.refetch()} /> : accounts.length === 0 ? <EmptyState title={listParams.role === 'STUDENT' ? '没有匹配的学生账号' : '没有匹配的教师账号'} description="调整搜索或筛选条件；学生账号由任课老师开通。" action={<button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'create', password: generateTemporaryPassword() })}><Plus aria-hidden="true" />创建教师</button>} /> : <>
+      {list.isLoading ? <LoadingState label="正在加载账号..." /> : list.error ? <ErrorState message={list.error.message} retry={() => void list.refetch()} /> : accounts.length === 0 ? <EmptyState title={isStudentList ? '没有匹配的学生账号' : '没有匹配的教师账号'} description={isStudentList ? '请核对学号或姓名，也可请任课老师确认账号是否已开通。' : '请调整搜索或筛选条件。'} /> : <>
         <div className="panel admin-table table-scroll">
           <table>
-            <thead><tr><th>教师</th><th>用户名</th><th>账号状态</th><th>密码状态</th><th>最近登录</th><th><span className="sr-only">账号操作</span></th></tr></thead>
+            <thead><tr><th>姓名</th><th>{isStudentList ? '学号' : '用户名'}</th><th>账号状态</th><th>密码状态</th><th>最近登录</th><th><span className="sr-only">账号操作</span></th></tr></thead>
             <tbody>{accounts.map((account) => <tr key={account.id}>
               <td><strong>{account.display_name}</strong></td>
               <td className="mono">{account.username}</td>
@@ -186,7 +193,7 @@ export function AdminPage() {
     {dialog?.kind === 'create' && <TeacherFormDialog password={dialog.password} pending={createTeacher.isPending} onClose={() => setDialog(null)} onSubmit={(input) => createTeacher.mutateAsync(input)} />}
     {dialog?.kind === 'status' && <StatusDialog account={dialog.user} pending={updateStatus.isPending} onClose={() => setDialog(null)} onConfirm={(nextStatus) => updateStatus.mutateAsync({ account: dialog.user, nextStatus })} />}
     {dialog?.kind === 'reset' && <ResetPasswordDialog account={dialog.user} pending={resetPassword.isPending} onClose={() => setDialog(null)} onConfirm={() => resetPassword.mutateAsync({ account: dialog.user, password: dialog.password })} />}
-    {dialog?.kind === 'credentials' && <CredentialsDialog displayName={dialog.displayName} username={dialog.username} password={dialog.password} onClose={() => setDialog(null)} />}
+    {dialog?.kind === 'credentials' && <CredentialsDialog account={dialog.account} password={dialog.password} onClose={() => setDialog(null)} />}
   </main>;
 }
 
@@ -239,30 +246,33 @@ function StatusDialog({ account, pending, onClose, onConfirm }: { account: User;
     catch (reason) { setError((reason as Error).message); }
   }
   return <Dialog title={`${disabling ? '停用' : '启用'}${account.role === 'STUDENT' ? '学生' : '教师'}账号`} description={`${account.display_name}（${account.username}）`} onClose={onClose} footer={<><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className={`btn ${disabling ? 'btn-danger' : 'btn-primary'}`} type="button" disabled={pending} onClick={() => void confirm()}>确认{disabling ? '停用' : '启用'}</button></>}>
-    <p>{disabling ? '停用后教师将无法登录，现有登录会话将被撤销。' : '启用后教师可以继续使用原密码登录。'}</p>
+    <p>{disabling ? '停用后该账号将无法登录，现有登录会话将被撤销。' : '启用后可以继续使用当前密码登录。'}</p>
     {error && <div className="form-alert" role="alert">{error}</div>}
   </Dialog>;
 }
 
 function ResetPasswordDialog({ account, pending, onClose, onConfirm }: { account: User; pending: boolean; onClose(): void; onConfirm(): Promise<unknown> }) {
   const [error, setError] = useState('');
+  const roleName = account.role === 'STUDENT' ? '学生' : '教师';
   async function confirm() {
     setError('');
     try { await onConfirm(); }
     catch (reason) { setError((reason as Error).message); }
   }
-  return <Dialog title="重置教师密码" description={`${account.display_name}（${account.username}）`} onClose={onClose} footer={<><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className="btn btn-primary" type="button" disabled={pending} onClick={() => void confirm()}>确认重置</button></>}>
-    <p>重置后现有登录会话将被撤销，教师使用新临时密码登录，下次登录后必须修改密码。</p>
+  return <Dialog title={`重置${roleName}密码`} description={`${account.display_name}（${account.username}）`} onClose={() => { if (!pending) onClose(); }} footer={<><button className="btn btn-secondary" type="button" disabled={pending} onClick={onClose}>取消</button><button className="btn btn-primary" type="button" disabled={pending} onClick={() => void confirm()}>确认重置</button></>}>
+    <p>重置后现有登录会话将被撤销，{roleName}使用新临时密码登录，下次登录后必须修改密码。</p>
     <p className="form-note">新临时密码会在操作成功后显示一次。</p>
     {error && <div className="form-alert" role="alert">{error}</div>}
   </Dialog>;
 }
 
-function CredentialsDialog({ displayName, username, password, onClose }: { displayName: string; username: string; password: string; onClose(): void }) {
+function CredentialsDialog({ account, password, onClose }: { account: User; password: string; onClose(): void }) {
   const toast = useToast();
   const [error, setError] = useState('');
+  const isStudent = account.role === 'STUDENT';
+  const usernameLabel = isStudent ? '学号' : '用户名';
   async function copyCredentials() {
-    const text = `姓名：${displayName}\n用户名：${username}\n临时密码：${password}\n首次登录后请立即修改密码。`;
+    const text = `姓名：${account.display_name}\n${usernameLabel}：${account.username}\n临时密码：${password}\n登录后请立即修改密码。`;
     try {
       await navigator.clipboard.writeText(text);
       toast.show('登录凭据已复制');
@@ -272,12 +282,12 @@ function CredentialsDialog({ displayName, username, password, onClose }: { displ
   }
   return <Dialog title="一次性登录凭据" description="关闭后无法再次查看，只能重置密码。" onClose={onClose} footer={<button className="btn btn-primary" type="button" onClick={onClose}>完成</button>}>
     <dl className="credential-list">
-      <div><dt>教师姓名</dt><dd>{displayName}</dd></div>
-      <div><dt>用户名</dt><dd className="mono">{username}</dd></div>
+      <div><dt>姓名</dt><dd>{account.display_name}</dd></div>
+      <div><dt>{usernameLabel}</dt><dd className="mono">{account.username}</dd></div>
       <div><dt>临时密码</dt><dd className="credential-value mono">{password}</dd></div>
     </dl>
     <button className="btn btn-secondary btn-block" type="button" onClick={() => void copyCredentials()}><Copy aria-hidden="true" />复制登录凭据</button>
-    <p className="form-note">请通过可信渠道交给教师，并提醒其首次登录后立即修改密码。</p>
+    <p className="form-note">请将临时密码私下交给{isStudent ? '学生' : '教师'}本人，并提醒对方登录后修改密码。</p>
     {error && <div className="form-alert" role="alert">{error}</div>}
   </Dialog>;
 }

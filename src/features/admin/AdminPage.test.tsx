@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -171,6 +171,27 @@ describe('AdminPage', () => {
 
     expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('teacher-1', 'Abcd2345Efgh6789');
     expect(await screen.findByRole('heading', { name: '一次性登录凭据' })).toBeInTheDocument();
+    expect(screen.getByText('Abcd2345Efgh6789')).toBeInTheDocument();
+  });
+
+  it('lets the administrator find a student by number and reset that account', async () => {
+    api.adminUsers.list.mockImplementation(async ({ role, q, page_size: pageSize }) => ({
+      ...userPage([], 0, pageSize),
+      items: role === 'STUDENT' && q === '001' && pageSize === 20
+        ? [{ ...teacher, role: 'STUDENT', id: 'student-1', username: '001', display_name: '张同学' }] : [],
+    }));
+    api.adminUsers.resetPassword.mockResolvedValue(undefined);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: '学生账号' }));
+    await userEvent.type(screen.getByLabelText('搜索学生'), '001');
+    await screen.findAllByText('张同学');
+    await userEvent.click(screen.getAllByRole('button', { name: '重置张同学密码' })[0]);
+    expect(screen.getByRole('heading', { name: '重置学生密码' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '确认重置' }));
+    expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('student-1', 'Abcd2345Efgh6789');
+    const credentials = await screen.findByRole('dialog', { name: '一次性登录凭据' });
+    expect(within(credentials).getByText('学号')).toBeInTheDocument();
     expect(screen.getByText('Abcd2345Efgh6789')).toBeInTheDocument();
   });
 

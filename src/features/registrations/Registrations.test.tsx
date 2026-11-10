@@ -52,10 +52,33 @@ it('retains selection and reason when review fails', async () => {
 
 it('reloads a recently cached empty list when the teacher returns after registration', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
-  client.setQueryData(['registrations', 'c1', 'PENDING'], { items: [] });
+  client.setQueryData(['registrations', 'c1', 'all'], { items: [] });
   mount(<RegistrationReviewPage />, true, client);
   expect(await screen.findByText('同学')).toBeInTheDocument();
-  expect(registrations.list).toHaveBeenCalledWith('c1', 'PENDING');
+  expect(registrations.list).toHaveBeenCalledWith('c1', 'all');
+});
+
+it('keeps the first result visible and can review the next applicant after refreshing', async () => {
+  const user = userEvent.setup();
+  const first = { id: 'r1', name: '第一位同学', student_number: '001', status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true };
+  const second = { ...first, id: 'r2', name: '第二位同学', student_number: '002' };
+  let items = [first];
+  registrations.list.mockImplementation(async (_classId, status) => ({
+    items: items.filter((item) => status === 'all' || status === item.status),
+  }));
+  registrations.review.mockImplementation(async (_classId, ids, decision) => {
+    items = items.map((item) => ids.includes(item.id) ? { ...item, status: decision, can_review: false } : item);
+    return { reviewed: 1 };
+  });
+  mount(<RegistrationReviewPage />, true);
+  await user.click(await screen.findByRole('button', { name: '通过' }));
+  expect(await screen.findByRole('cell', { name: '已通过' })).toBeInTheDocument();
+  items = [...items, second];
+  await user.click(screen.getByRole('button', { name: '刷新申请' }));
+  expect(await screen.findByText('第二位同学')).toBeInTheDocument();
+  expect(screen.getAllByRole('row')[1]).toHaveTextContent('第二位同学');
+  await user.click(screen.getByRole('button', { name: '通过' }));
+  await waitFor(() => expect(screen.getAllByRole('cell', { name: '已通过' })).toHaveLength(2));
 });
 
 it('automatically fetches new applications while the review page stays open', async () => {

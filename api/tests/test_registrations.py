@@ -71,6 +71,60 @@ def request_registration(client, group, student, password="Registration-pass-123
     )
 
 
+def test_admin_resets_student_password_and_student_can_change_it(portal_context, portal_client):
+    from attendance_api.security.passwords import hash_password
+
+    db, teacher, student, group, other = portal_context
+    client, app = portal_client
+    old_password = "Old-student-password-123"
+    temporary = "Temporary-password-123"
+    student.password_hash = hash_password(old_password)
+    admin = User(
+        username="reset-admin",
+        display_name="Admin",
+        password_hash=hash_password("Admin-password-123"),
+        role="ADMIN",
+        must_change_password=False,
+    )
+    db.add(admin)
+    db.commit()
+    del app.dependency_overrides[get_current_user]
+
+    def login(username, password):
+        return client.post("/api/v1/auth/login", json={"username": username, "password": password})
+
+    def headers(response):
+        assert response.status_code == 200
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    old_session = headers(login(student.username, old_password))
+    admin_session = headers(login(admin.username, "Admin-password-123"))
+    listed = client.get(
+        "/api/v1/admin/users",
+        params={"role": "STUDENT", "q": student.username},
+        headers=admin_session,
+    )
+    assert [item["id"] for item in listed.json()["items"]] == [student.id]
+    reset_url = f"/api/v1/admin/users/{student.id}/reset-password"
+    payload = {"temporary_password": temporary}
+    assert client.post(reset_url, json=payload, headers=old_session).status_code == 403
+    assert client.post(reset_url, json=payload, headers=admin_session).status_code == 204
+    assert client.get("/api/v1/auth/me", headers=old_session).status_code == 401
+    assert login(student.username, old_password).status_code == 401
+
+    signed_in = login(student.username, temporary)
+    temporary_session = headers(signed_in)
+    assert signed_in.json()["user"]["must_change_password"]
+    assert client.get("/api/v1/student/classes", headers=temporary_session).status_code == 403
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": temporary, "new_password": "New-student-password-123"},
+        headers=temporary_session,
+    )
+    assert client.get("/api/v1/student/classes", headers=headers(changed)).status_code == 200
+    assert login(student.username, temporary).status_code == 401
+
+
 @pytest.fixture
 def second_teacher_class(portal_context):
     from attendance_api.models import ClassGroup, Course
