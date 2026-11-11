@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智能课堂考勤｜项目全景</title>
+<style>
+:root{color-scheme:light;--ink:#162740;--muted:#435570;--line:#d7e0ec;--accent:#125b55;--paper:#f1f5fa}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}header{background:#11263c;color:#fff;padding:64px 24px 48px}main,.wrap{max-width:1100px;margin:auto}main{padding:24px 24px 48px}h1{font-size:clamp(2.2rem,6vw,4rem);line-height:1.1;margin:.3em 0}h2{margin:0 0 12px;font-size:1.65rem}h3{margin:0;font-size:1.07rem}p{margin:.45em 0}header p{color:#d2e3f2;max-width:46em}.eyebrow{color:#9be4d1;font-weight:700;letter-spacing:.12em}nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}nav a{color:#fff;border:1px solid #7792a6;border-radius:30px;padding:4px 13px;text-decoration:none}a{color:var(--accent)}a:focus-visible{outline:3px solid #db8b22;outline-offset:3px}section{margin:28px 0 42px;scroll-margin-top:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px}.card,.panel,details{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 19px}.tag{display:inline-block;color:var(--accent);background:#e7f4ef;border-radius:20px;padding:1px 10px;font-size:.83rem;margin-bottom:6px;font-weight:650}.flow{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;margin:8px 0}.flow li{border:1px solid var(--line);border-radius:8px;padding:4px 9px}.flow li::before{content:counter(list-item,decimal-leading-zero) " / ";color:var(--accent);font-weight:700}.muted,small{color:var(--muted)}details{margin:9px 0}summary{cursor:pointer;font-weight:700}details p{margin:.6em 0 0}code{overflow-wrap:anywhere}footer{border-top:1px solid var(--line);padding-top:14px}
+@media print{header{padding:12px 0;background:white;color:#162740}header p,.eyebrow{color:#435570}nav{display:none}body{background:white}main{padding:0}.card,.panel,details{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<div class="eyebrow">项目全景 · 2026-11-04</div>
+<h1>智能课堂考勤</h1>
+<p>面向任课教师、学生和账号管理员的课堂管理系统，覆盖开班、名单、点名、课后修正、平时成绩与学生自助查询。</p>
+<nav aria-label="页面目录"><a href="#workflow">业务流程</a><a href="#features">功能地图</a><a href="#architecture">技术架构</a><a href="#challenges">亮点与难点</a><a href="#sources">源码索引</a></nav>
+</div></header>
+<main>
+<section id="workflow"><h2>01 / 一门课如何使用</h2><div class="panel">
+<ol class="flow"><li>管理员开通教师账号</li><li>教师建课建班</li><li>导入或维护学生名单</li><li>课堂点名并结束场次</li><li>课后修正与导出</li><li>登记并汇总平时成绩</li></ol>
+<p class="muted">学生可由教师开通账号，也可按名单自助申请。教师按班级决定开放哪些个人数据，并可分别委托班长代录指定成绩项目或审核本班注册。</p>
+</div></section>
+<section id="features"><h2>02 / 功能地图</h2><div class="grid">
+<article class="card"><span class="tag">管理员 · 教师 · 学生</span><h3>账号与登录</h3><p>登录、恢复会话、退出、首次改密和角色分流。管理员搜索和筛选账号，创建教师账号，并对教师或学生账号执行启用、停用和密码重置。临时密码仅在发放时展示。</p></article>
+<article class="card"><span class="tag">教师</span><h3>工作台与课程班级</h3><p>工作台集中展示课程与考勤入口。课程和班级支持创建、编辑和生命周期管理。课程可按名称或代码查询，按状态筛选。归档保留历史，永久删除班级会清理关联业务数据。</p></article>
+<article class="card"><span class="tag">教师</span><h3>名单与学生资料</h3><p>支持单人新增、编辑、移除以及 CSV / Excel 批量导入。导入先预览与校验，再确认写入。资料按学生身份跨班共用，改学号或姓名时会同步已开通账号的登录名或显示名。</p></article>
+<article class="card"><span class="tag">教师</span><h3>课堂点名</h3><p>从班级名单创建场次，同班同日可有多次点名。支持按钮和键盘标记已到、缺勤、迟到、请假，支持语音播报与静音、异常名单与进度反馈。处理完待确认学生后结束场次。</p></article>
+<article class="card"><span class="tag">教师</span><h3>历史考勤与导出</h3><p>查询场次和学生状态，查看首次标记与最后修改信息。已完成场次支持填写原因修正，导出单次考勤 CSV / XLSX。</p></article>
+<article class="card"><span class="tag">教师</span><h3>平时成绩</h3><p>按班级维护作业、课堂表现、上机实验和其他项目，配置默认积分，登记正负小数与备注，查看变更历史。支持删除项目、配置基础分和类别系数，以及导出项目明细或成绩汇总。</p></article>
+<article class="card"><span class="tag">学生 · 教师 · 授权班长</span><h3>自助注册与审核</h3><p>学生以学号、姓名匹配名单，选择班级并自行设置密码。教师可单条或批量通过、驳回并查历史。学生在多位教师有效名单中时，相关教师可处理同一份申请。班长只审核授权班级收到的申请。</p></article>
+<article class="card"><span class="tag">学生 · 教师</span><h3>学生个人中心</h3><p>跨班复用学生账号，按本人有效名单关系展示班级。教师可独立开放本人考勤，平时成绩可关闭、只显示总分或同时显示明细。页面支持定期及手动刷新。</p></article>
+<article class="card"><span class="tag">授权班长 · 教师</span><h3>班长代录与授权管理</h3><p>老师可为多名班长分别分配指定项目，独立授予注册审核权限，随时调整或撤销。班长可查看授权项目名单并为同学录入积分与备注，本人成绩只读。操作记录实际执行人。</p></article>
+</div></section>
+<section id="architecture"><h2>03 / 技术架构</h2><div class="grid">
+<article class="card"><h3>浏览器</h3><p>React、TypeScript、Vite、React Router 和 TanStack Query 组织页面、角色入口、会话恢复与服务端数据缓存。</p></article>
+<article class="card"><h3>业务 API</h3><p>FastAPI 按鉴权、教务、考勤、成绩、学生门户和授权等业务拆分路由与服务。访问令牌驻留浏览器内存，刷新令牌由 HttpOnly Cookie 承载，密码使用 Argon2 哈希。</p></article>
+<article class="card"><h3>持久化与本地运行</h3><p>SQLAlchemy 持久化到 MySQL，Alembic 管理增量迁移。Windows 启动脚本串起 Docker Compose、依赖同步、迁移与前后端启动。开发与测试数据库独立。</p></article>
+</div></section>
+<section id="challenges"><h2>04 / 技术亮点与实现难点</h2>
+<p class="muted">难度按业务约束和实现复杂度定性评估。</p>
+<details open><summary>高 · 跨班身份与资源级权限</summary><p>学生身份全局复用，名单关系决定班级访问范围。注册共享审核依赖学生 ID 和有效名单，班长的项目代录与注册审核则分别授权。难点在于每次请求都要结合当前名单、班级状态、账号状态与具体项目判断权限，并在 API 返回前过滤学生不可查看的字段。</p></details>
+<details open><summary>高 · 并发提交与审计一致性</summary><p>考勤记录用预期版本做条件更新，成绩写入结合班级成绩版本和数据库行锁。注册审核会锁定相关记录并重新判断申请状态。教师与班长同时保存，或两位教师同时审核时，旧页面需要收到冲突反馈。代录和修正还要能追溯真实操作人。</p></details>
+<details open><summary>高 · 当前名单与历史事实分离</summary><p>开场时保存学号、姓名、班级等考勤快照，历史详情与导出可继续使用当时的身份信息。名单移除、课程归档和永久删除各有不同的数据后果。难点在于把历史读取、后续修改和关联清理分别处理，同时维护跨班共用的学生档案。</p></details>
+<details open><summary>中高 · 成绩计算与未评价语义</summary><p><strong>原始总分 = 基础分 + Σ（类别净积分 × 类别系数）</strong>。最终成绩限制在 0–100，原始总分保留，后端用 Decimal 处理小数。空值代表未评价，零积分代表已登记零分，默认积分调整也要保护已保存分值。汇总、个人查询和导出需要保持口径一致。考勤与期末成绩独立于这套计算。</p></details>
+<details open><summary>中高 · 课堂即时反馈与同步</summary><p>教师需要连续按键标记并听到姓名播报，页面同时维护异常名单、处理进度与服务端同步状态。难点在于兼顾快速操作和场次完成条件，语音不可用时仍可通过按钮与键盘完成点名。仓库包含前端语音 hook 与后端 Edge TTS 接口。</p></details>
+<details open><summary>中 · 批量导入与升级兼容</summary><p>导入把解析、字段校验与实际写入拆为预览和确认，处理重复学号、姓名冲突、班级不匹配和预览过期等情况。Alembic 迁移覆盖历史结构修复、同日多场次与后续成绩、门户和注册能力。仓库包含计算、并发、权限、迁移和基于 API 夹具的浏览器测试。</p></details>
+</section>
+<section id="sources"><h2>05 / 源码索引</h2><div class="panel">
+<ul>
+<li>页面与角色入口 <a href="../src/app/router.tsx">router.tsx</a>，操作细节 <a href="admin-teacher-user-guide.md">管理员与教师使用教程</a>。</li>
+<li>身份与权限 <a href="../api/src/attendance_api/modules/registrations/service.py">注册审核</a>、<a href="../api/src/attendance_api/modules/monitors/service.py">班长授权</a>、<a href="../api/src/attendance_api/modules/portal/service.py">学生门户</a>。</li>
+<li>业务一致性 <a href="../api/src/attendance_api/modules/attendance/service.py">考勤服务</a>、<a href="../api/src/attendance_api/modules/scores/service.py">成绩服务</a>、<a href="../api/src/attendance_api/modules/imports/service.py">导入服务</a>。</li>
+<li>运行与验证 <a href="../README.md">项目 README</a>、<a href="../api/README.md">API README</a>、<a href="../scripts/start.ps1">Windows 启动脚本</a>。</li>
+</ul></div></section>
+<footer><small>依据当前工作区的页面、服务、测试与文档整理。功能范围以仓库实现为准。</small></footer>
+</main>
+</body>
+</html>

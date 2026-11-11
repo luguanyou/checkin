@@ -227,7 +227,7 @@ async function run() {
     watchPage(adminPage);
     const adminFixtures = createFixtures('ADMIN'); await installApi(adminPage, adminFixtures); await adminPage.goto(baseUrl);
     await adminPage.getByRole('heading', { name: '登录课点' }).waitFor();
-    await adminPage.getByLabel('用户名').fill('admin'); await adminPage.getByLabel('密码').fill('short-pass'); await adminPage.getByRole('button', { name: '登录' }).click();
+    await adminPage.getByLabel('用户名').fill('admin'); await adminPage.getByLabel('密码', { exact: true }).fill('short-pass'); await adminPage.getByRole('button', { name: '登录' }).click();
     await adminPage.getByRole('heading', { name: '教师账号' }).waitFor();
     assert.equal(new URL(adminPage.url()).pathname, '/admin');
     assert.equal(adminFixtures.requests.filter((request) => request === 'POST /api/v1/auth/login').length, 1);
@@ -255,12 +255,42 @@ async function run() {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
     watchPage(page);
     await page.addInitScript(() => {
+      Object.defineProperty(window, 'PasswordCredential', { value: undefined, configurable: true });
       Object.defineProperty(window, 'speechSynthesis', { value: { cancel() {}, speak() {} } });
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: class { constructor(text) { this.text = text; } } });
     });
     const fixtures = createFixtures(); await installApi(page, fixtures); await page.goto(baseUrl);
     await page.getByRole('heading', { name: '登录课点' }).waitFor();
-    await page.getByLabel('用户名').fill('teacher01'); await page.getByLabel('密码').fill('correct-password'); await page.getByRole('button', { name: '登录' }).click();
+    const rememberPassword = page.getByRole('checkbox', { name: '记住密码', exact: true });
+    assert.equal(await rememberPassword.isChecked(), false);
+    await rememberPassword.check();
+    assert.equal(await rememberPassword.isChecked(), true);
+    await rememberPassword.uncheck();
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await rememberPassword.isVisible(), true);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `login at ${width}px overflow`);
+      if (width === 390) await page.screenshot({ path: path.join(root, '.superpowers', 'login-remember-password.png'), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await rememberPassword.check();
+    await page.getByLabel('用户名').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password'); await page.getByRole('button', { name: '登录' }).click();
+    await page.getByRole('heading', { name: '工作台' }).waitFor();
+    await page.getByRole('button', { name: '退出登录', exact: true }).click();
+    await page.getByRole('heading', { name: '登录课点' }).waitFor();
+    await page.reload();
+    await page.getByRole('heading', { name: '登录课点' }).waitFor();
+    assert.equal(await page.getByLabel('用户名', { exact: true }).inputValue(), 'teacher01');
+    assert.equal(await page.getByLabel('密码', { exact: true }).inputValue(), 'correct-password');
+    assert.equal(await rememberPassword.isChecked(), true);
+    await rememberPassword.uncheck();
+    await page.reload();
+    await page.getByRole('heading', { name: '登录课点' }).waitFor();
+    assert.equal(await page.getByLabel('用户名', { exact: true }).inputValue(), '');
+    assert.equal(await page.getByLabel('密码', { exact: true }).inputValue(), '');
+    assert.equal(await rememberPassword.isChecked(), false);
+    await page.getByLabel('用户名').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password');
+    await page.getByRole('button', { name: '登录', exact: true }).click();
     await page.getByRole('heading', { name: '工作台' }).waitFor();
     assert.equal(await page.locator('.metric').count(), 3);
 
