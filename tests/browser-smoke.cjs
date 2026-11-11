@@ -49,7 +49,7 @@ async function installApi(page, data) {
     if (endpoint === '/api/v1/auth/student-registration/classes') return json({ items: [{ id: 'class-1', name: '一班', course_name: '设计', term: '2026' }] });
     if (endpoint === '/api/v1/auth/student-register') {
       const input = request.postDataJSON();
-      data.registrations.push({ id: 'registration-1', name: input.name, student_number: input.student_number, status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true });
+      data.registrations.push({ id: `registration-${input.student_number}`, name: input.name, student_number: input.student_number, status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true });
       return json({ status: 'PENDING', message: '申请已提交' }, 201);
     }
     if (endpoint === '/api/v1/classes/class-1/registrations') return json({ items: data.registrations.filter((item) => url.searchParams.get('status') === 'all' || item.status === (url.searchParams.get('status') || 'PENDING')) });
@@ -76,12 +76,21 @@ async function installApi(page, data) {
       if (method === 'PUT') data.visibility = request.postDataJSON();
       return json(data.visibility);
     }
-    if (endpoint === '/api/v1/student/classes') return json({ items: [{ id: 'class-1', name: '一班', course_name: '设计', term: '2026', can_record_scores: data.monitorGrants.length > 0, can_review_registrations: Boolean(data.canReview), ...data.visibility }] });
+    if (endpoint === '/api/v1/student/classes') return json({ items: [
+      { id: 'class-1', name: '一班', course_name: '设计', term: '2026', teacher_name: '王老师', can_record_scores: data.monitorGrants.length > 0, can_review_registrations: Boolean(data.canReview), ...data.visibility },
+      { id: 'class-2', name: '一班', course_name: '绘图', term: '2026', teacher_name: '李老师', attendance_visible: false, score_visibility: 'HIDDEN' },
+    ] });
     if (endpoint === '/api/v1/student/classes/class-1/teaching-content') return json({ items: [] });
     if (endpoint === '/api/v1/student/classes/class-1') return json({ ...data.visibility,
       attendance: data.visibility.attendance_visible ? [{ id: 'a1', date: '2026-11-02', status: 'present', session_status: 'COMPLETED' }] : null,
       score: data.visibility.score_visibility === 'HIDDEN' ? null : { final_score: '75.2', status: 'READY' }, details: null,
     });
+    if (endpoint === '/api/v1/student/classes/class-2/teaching-content') return json({ items: [] });
+    if (endpoint === '/api/v1/student/classes/class-2') return json({ attendance_visible: false, score_visibility: 'HIDDEN', attendance: null, score: null, details: null });
+    if (endpoint === '/api/v1/classes/class-1/students/s1/reset-password' && method === 'POST') {
+      data.resetPassword = request.postDataJSON().temporary_password;
+      return json({ username: data.roster[0].student.student_number });
+    }
     if (endpoint === '/api/v1/auth/refresh') return data.authenticated ? json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }) : error('AUTHENTICATION_REQUIRED', '请先登录', 401);
     if (endpoint === '/api/v1/auth/login' && method === 'POST') { data.login(); return json({ access_token: 'token', token_type: 'bearer', expires_in: 900, user: data.user }); }
     if (endpoint === '/api/v1/auth/logout') { data.logout(); return route.fulfill({ status: 204 }); }
@@ -150,11 +159,31 @@ async function run() {
     assert.equal(await signupPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'signup mobile overflow');
     await signupPage.getByRole('button', { name: '提交注册申请' }).click(); await signupPage.getByText(/申请已提交，等待任课老师/).waitFor();
     await registrationTeacherPage.getByRole('checkbox', { name: '选择注册同学的申请' }).check({ timeout: 20_000 });
+    await registrationTeacherPage.getByLabel('申请状态').selectOption('PENDING');
+    await registrationTeacherPage.getByRole('checkbox', { name: '选择注册同学的申请' }).check();
     await registrationTeacherPage.getByRole('button', { name: '通过所选（1）' }).click(); await registrationTeacherPage.getByText('已处理 1 条注册申请').waitFor();
     assert.equal(signupData.registrations[0].status, 'APPROVED');
+    await registrationTeacherPage.getByRole('cell', { name: '已通过' }).waitFor();
+    signupData.registrations.push({ id: 'registration-010', name: '新申请同学', student_number: '010', status: 'PENDING', created_at: '2026-11-03T00:00:00', can_review: true });
+    await registrationTeacherPage.reload();
+    await registrationTeacherPage.getByRole('checkbox', { name: '选择新申请同学的申请' }).waitFor();
+    await registrationTeacherPage.getByRole('cell', { name: '已通过' }).waitFor();
     await signupPage.getByRole('link', { name: '返回登录', exact: true }).click();
+    await signupPage.getByText('忘记密码？', { exact: true }).click();
+    await signupPage.getByText(/核对身份后领取临时密码/).waitFor();
     await signupPage.getByLabel('用户名', { exact: true }).fill('009'); await signupPage.getByLabel('密码', { exact: true }).fill('Student-password-123');
     await signupPage.getByRole('button', { name: '登录', exact: true }).click(); await signupPage.getByRole('heading', { name: '我的课程' }).waitFor();
+    const coursePicker = signupPage.getByLabel('课程班级');
+    await coursePicker.waitFor();
+    assert.equal(await coursePicker.inputValue(), '');
+    assert.equal(signupData.requests.some((request) => request.startsWith('GET /api/v1/student/classes/')), false);
+    await coursePicker.selectOption({ label: '绘图 · 一班 · 2026 · 李老师' });
+    await signupPage.getByText('老师暂未开放考勤查看').waitFor();
+    assert.equal(signupData.requests.includes('GET /api/v1/student/classes/class-2'), true);
+    assert.equal(signupData.requests.includes('GET /api/v1/student/classes/class-1'), false);
+    await signupPage.reload();
+    await signupPage.getByText('老师暂未开放考勤查看').waitFor();
+    assert.equal(await coursePicker.inputValue(), 'class-2');
     await signupPage.close(); await registrationTeacherPage.close();
     const studentPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
     watchPage(studentPage);
@@ -162,6 +191,7 @@ async function run() {
     await installApi(studentPage, studentData); await studentPage.goto(`${baseUrl}/scores`);
     await studentPage.getByRole('heading', { name: '我的课程' }).waitFor();
     assert.equal(new URL(studentPage.url()).pathname, '/student');
+    await studentPage.getByLabel('课程班级').selectOption('class-1');
     await studentPage.getByText('老师暂未开放考勤查看').waitFor();
     await studentPage.getByText('老师暂未开放平时分查看').waitFor();
     studentData.visibility = { attendance_visible: true, score_visibility: 'TOTAL' };
@@ -239,6 +269,13 @@ async function run() {
     await page.getByText('服务设计专题').waitFor();
 
     await page.getByRole('link', { name: '管理名单' }).first().click(); await page.getByRole('heading', { name: '2024 级 2 班' }).waitFor();
+    await page.getByRole('button', { name: '重置张敏密码', exact: true }).click();
+    await page.getByRole('heading', { name: '重置学生密码' }).waitFor();
+    await page.getByRole('button', { name: '确认重置', exact: true }).click();
+    await page.getByRole('heading', { name: '学生密码已重置' }).waitFor();
+    assert.equal(await page.getByLabel('临时密码', { exact: true }).inputValue(), fixtures.resetPassword);
+    assert.match(fixtures.resetPassword, /^[0-9]{8}$/);
+    await page.getByRole('button', { name: '完成', exact: true }).click();
     await page.getByRole('button', { name: '编辑张敏', exact: true }).click();
     await page.getByRole('heading', { name: '编辑学生资料' }).waitFor();
     assert.equal(await page.getByLabel('学号', { exact: true }).inputValue(), '20260001');

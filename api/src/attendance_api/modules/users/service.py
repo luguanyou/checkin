@@ -8,7 +8,7 @@ from attendance_api.models.base import utc_now
 from attendance_api.modules.audit.service import append_audit
 from attendance_api.security.passwords import (
     hash_password,
-    password_meets_policy,
+    temporary_password_meets_policy,
     verify_password,
 )
 
@@ -55,8 +55,8 @@ def create_teacher(
     ip_address: str,
     request_id: str,
 ) -> User:
-    if not password_meets_policy(temporary_password):
-        raise ApiError(400, "PASSWORD_POLICY_VIOLATION", "密码长度必须为 12 至 128 个字符")
+    if not temporary_password_meets_policy(temporary_password):
+        raise ApiError(400, "PASSWORD_POLICY_VIOLATION", "临时密码需为 8 位数字或 12 至 128 个字符")
     normalized_username = username.strip().lower()
     if db.scalar(select(User.id).where(User.username == normalized_username)) is not None:
         raise ApiError(409, "DUPLICATE_RESOURCE", "用户名已存在")
@@ -145,8 +145,8 @@ def reset_user_password(
     ip_address: str,
     request_id: str,
 ) -> None:
-    if not password_meets_policy(temporary_password):
-        raise ApiError(400, "PASSWORD_POLICY_VIOLATION", "密码长度必须为 12 至 128 个字符")
+    if not temporary_password_meets_policy(temporary_password):
+        raise ApiError(400, "PASSWORD_POLICY_VIOLATION", "临时密码需为 8 位数字或 12 至 128 个字符")
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
     if user is None:
         raise ApiError(404, "RESOURCE_NOT_FOUND", "用户不存在")

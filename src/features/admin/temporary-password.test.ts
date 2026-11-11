@@ -1,30 +1,28 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  generateTemporaryPassword,
-  TEMPORARY_PASSWORD_ALPHABET,
-} from './temporary-password';
+import { generateTemporaryPassword } from './temporary-password';
 
 describe('generateTemporaryPassword', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('generates a 16-character password from the approved alphabet', () => {
+  it('generates eight digits and preserves leading zeros', () => {
     vi.spyOn(crypto, 'getRandomValues').mockImplementation((values) => {
-      (values as Uint8Array).fill(0);
+      (values as Uint32Array).fill(12345);
       return values;
     });
 
     const password = generateTemporaryPassword();
 
-    expect(password).toBe(TEMPORARY_PASSWORD_ALPHABET[0].repeat(16));
-    expect(password).toHaveLength(16);
+    expect(password).toBe('00012345');
   });
 
-  it('requests one cryptographic random byte per character', () => {
-    const random = vi.spyOn(crypto, 'getRandomValues');
-
+  it('rejects values outside the uniform range and draws fresh randomness each time', () => {
+    const random = vi.spyOn(crypto, 'getRandomValues').mockImplementation((values) => {
+      (values as Uint32Array)[0] = random.mock.calls.length === 1 ? 4_294_967_295 : 87654321;
+      return values;
+    });
+    expect(generateTemporaryPassword()).toBe('87654321');
+    expect(random).toHaveBeenCalledTimes(2);
     generateTemporaryPassword();
-
-    expect(random).toHaveBeenCalledOnce();
-    expect((random.mock.calls[0]?.[0] as Uint8Array).length).toBe(16);
+    expect(random).toHaveBeenCalledTimes(3);
   });
 });

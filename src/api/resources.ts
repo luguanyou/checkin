@@ -69,6 +69,7 @@ export function createApi(client: ApiClient) {
       visibility: (classId: string) => client.request<StudentVisibility>(`/classes/${classId}/student-visibility`),
       setVisibility: (classId: string, input: StudentVisibility) => client.request<StudentVisibility>(`/classes/${classId}/student-visibility`, json('PUT', input)),
       createAccount: (classId: string, studentId: string, temporary_password: string) => client.request<{ username: string }>(`/classes/${classId}/students/${studentId}/account`, json('POST', { temporary_password })),
+      resetPassword: (classId: string, studentId: string, temporary_password: string) => client.request<{ username: string }>(`/classes/${classId}/students/${studentId}/reset-password`, json('POST', { temporary_password })),
       classes: () => client.request<{ items: StudentClass[] }>('/student/classes'),
       get: (classId: string) => client.request<StudentClassData>(`/student/classes/${classId}`, { cache: 'no-store' }),
     },

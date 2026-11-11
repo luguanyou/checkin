@@ -60,7 +60,9 @@ def submit(db: Session, *, number: str, name: str, class_id: str, password: str)
             (User.student_id == student.id) | (User.username == student.student_number.lower())
         )
     ):
-        raise ApiError(409, "ACCOUNT_EXISTS", "账号已存在，请直接登录；忘记密码请联系管理员")
+        raise ApiError(
+            409, "ACCOUNT_EXISTS", "账号已存在，请直接登录；忘记密码请联系任课老师或超级管理员重置"
+        )
     if class_id not in {item["id"] for item in eligible_classes(db, student.id)}:
         raise ApiError(400, "INVALID_CLASS", "不在该班级的有效名单中，请重新匹配班级")
     registration = db.scalar(

@@ -17,3 +17,9 @@ def verify_password(password_hash: str, candidate: str) -> bool:
 
 def password_meets_policy(password: str) -> bool:
     return 12 <= len(password) <= 128
+
+
+def temporary_password_meets_policy(password: str) -> bool:
+    return (
+        len(password) == 8 and password.isascii() and password.isdigit()
+    ) or password_meets_policy(password)

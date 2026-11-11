@@ -37,11 +37,14 @@ def student_classes(db: Session, user: User) -> list[dict[str, Any]]:
         )
     )
     rows = db.execute(
-        select(ClassGroup, Course)
+        select(ClassGroup, Course, User.display_name)
         .join(Course, Course.id == ClassGroup.course_id)
+        .join(User, User.id == Course.owner_teacher_id)
         .join(Enrollment, Enrollment.class_group_id == ClassGroup.id)
         .where(Enrollment.student_id == user.student_id, Enrollment.status == "ACTIVE")
-        .order_by(Course.term.desc(), Course.name, ClassGroup.name)
+        .order_by(
+            Course.term.desc(), Course.name, ClassGroup.name, User.display_name, ClassGroup.id
+        )
     ).all()
     return [
         {
@@ -49,13 +52,14 @@ def student_classes(db: Session, user: User) -> list[dict[str, Any]]:
             "name": group.name,
             "course_name": course.name,
             "term": course.term,
+            "teacher_name": teacher_name,
             "can_record_scores": group.id in monitor_classes,
             "can_review_registrations": group.id in review_classes
             and group.status == "ACTIVE"
             and course.status == "ACTIVE",
             **visibility(group),
         }
-        for group, course in rows
+        for group, course, teacher_name in rows
     ]
 
 
@@ -134,7 +138,7 @@ def student_class_data(db: Session, *, user: User, class_id: str) -> dict[str, A
 def owned_student(db: Session, *, teacher: User, class_id: str, student_id: str) -> Student:
     group, course = get_owned_class_group(db, teacher_id=teacher.id, class_group_id=class_id)
     if group.status != "ACTIVE" or course.status != "ACTIVE":
-        raise ApiError(409, "RESOURCE_STATE_CONFLICT", "归档班级不可开通账号")
+        raise ApiError(409, "RESOURCE_STATE_CONFLICT", "归档课程或班级不可管理学生账号")
     student = db.scalar(
         select(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)

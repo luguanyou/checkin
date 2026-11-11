@@ -1,7 +1,7 @@
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import Field
+from pydantic import Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -22,8 +22,9 @@ from attendance_api.modules.portal.service import (
     student_classes,
     visibility,
 )
+from attendance_api.modules.users.service import reset_user_password
 from attendance_api.schemas.common import ApiModel
-from attendance_api.security.passwords import hash_password
+from attendance_api.security.passwords import hash_password, temporary_password_meets_policy
 
 
 def no_cache(response: Response) -> None:
@@ -42,7 +43,14 @@ class VisibilityRequest(ApiModel):
 
 
 class AccountRequest(ApiModel):
-    temporary_password: str = Field(min_length=12, max_length=128)
+    temporary_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_temporary_password(cls, value: str) -> str:
+        if not temporary_password_meets_policy(value):
+            raise ValueError("临时密码需为 8 位数字或 12 至 128 个字符")
+        return value
 
 
 def require_student(user: Annotated[User, Depends(get_current_user)]) -> User:
@@ -127,7 +135,9 @@ def create_account(
         raise ApiError(409, "REGISTRATION_PENDING", "该学生已有注册申请，请在学生注册审核中处理")
     if db.scalar(select(User.id).where(User.student_id == student.id)):
         raise ApiError(
-            409, "DUPLICATE_RESOURCE", "该学生已有账号，无需重复开通；忘记密码请联系管理员"
+            409,
+            "DUPLICATE_RESOURCE",
+            "该学生已有账号，请关闭弹窗后点击该学生的「重置密码」",
         )
     account = User(
         username=student.student_number.strip().lower(),
@@ -155,6 +165,31 @@ def create_account(
     except IntegrityError:
         db.rollback()
         raise ApiError(409, "DUPLICATE_RESOURCE", "账号或学号已被使用，请联系管理员") from None
+    return {"username": account.username}
+
+
+@router.post("/classes/{class_id}/students/{student_id}/reset-password")
+def reset_student_password(
+    class_id: str,
+    student_id: str,
+    payload: AccountRequest,
+    request: Request,
+    db: DB,
+    teacher: Teacher,
+    changed: Changed,
+) -> dict[str, str]:
+    student = owned_student(db, teacher=teacher, class_id=class_id, student_id=student_id)
+    account = db.scalar(select(User).where(User.student_id == student.id, User.role == "STUDENT"))
+    if account is None:
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "该学生尚未开通账号，请先审核注册或开通账号")
+    reset_user_password(
+        db,
+        actor=teacher,
+        user_id=account.id,
+        temporary_password=payload.temporary_password,
+        ip_address=request.client.host if request.client else "unknown",
+        request_id=str(request.state.request_id),
+    )
     return {"username": account.username}
 
 

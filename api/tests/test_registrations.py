@@ -77,7 +77,7 @@ def test_admin_resets_student_password_and_student_can_change_it(portal_context,
     db, teacher, student, group, other = portal_context
     client, app = portal_client
     old_password = "Old-student-password-123"
-    temporary = "Temporary-password-123"
+    temporary = "04268135"
     student.password_hash = hash_password(old_password)
     admin = User(
         username="reset-admin",
@@ -99,6 +99,17 @@ def test_admin_resets_student_password_and_student_can_change_it(portal_context,
 
     old_session = headers(login(student.username, old_password))
     admin_session = headers(login(admin.username, "Admin-password-123"))
+    created_teacher = client.post(
+        "/api/v1/admin/users",
+        json={
+            "username": "numeric-temp-teacher",
+            "display_name": "Teacher",
+            "temporary_password": "02468135",
+        },
+        headers=admin_session,
+    )
+    assert created_teacher.status_code == 201
+    assert created_teacher.json()["must_change_password"]
     listed = client.get(
         "/api/v1/admin/users",
         params={"role": "STUDENT", "q": student.username},
@@ -116,6 +127,14 @@ def test_admin_resets_student_password_and_student_can_change_it(portal_context,
     temporary_session = headers(signed_in)
     assert signed_in.json()["user"]["must_change_password"]
     assert client.get("/api/v1/student/classes", headers=temporary_session).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": temporary, "new_password": "12345678"},
+            headers=temporary_session,
+        ).status_code
+        == 400
+    )
     changed = client.post(
         "/api/v1/auth/change-password",
         json={"current_password": temporary, "new_password": "New-student-password-123"},
@@ -123,6 +142,7 @@ def test_admin_resets_student_password_and_student_can_change_it(portal_context,
     )
     assert client.get("/api/v1/student/classes", headers=headers(changed)).status_code == 200
     assert login(student.username, temporary).status_code == 401
+    assert login(student.username, "New-student-password-123").status_code == 200
 
 
 @pytest.fixture
@@ -220,6 +240,68 @@ def test_shared_review_requires_own_class_and_active_roster(
         409 if membership == "active" else 404
     )
     assert registration.status == "PENDING"
+
+
+def test_two_teachers_see_new_registrations_and_share_one_student_account(
+    portal_context, portal_client, applicant, second_teacher_class
+):
+    db, first_teacher, _, first_class, unrelated = portal_context
+    second_teacher, second_class = second_teacher_class
+    client, app = portal_client
+    newcomer = Student(student_number="011", name="New applicant")
+    db.add(newcomer)
+    db.flush()
+    db.add_all(
+        [
+            Enrollment(class_group_id=second_class.id, student_id=applicant.id),
+            Enrollment(class_group_id=first_class.id, student_id=newcomer.id),
+            Enrollment(class_group_id=second_class.id, student_id=newcomer.id),
+        ]
+    )
+    db.commit()
+
+    assert request_registration(client, first_class, applicant).status_code == 201
+    app.dependency_overrides[get_current_user] = lambda: second_teacher
+    url = f"/api/v1/classes/{second_class.id}/registrations"
+    item = client.get(url).json()["items"][0]
+    assert (
+        client.post(
+            f"{url}/review", json={"registration_ids": [item["id"]], "decision": "APPROVED"}
+        ).status_code
+        == 200
+    )
+
+    assert request_registration(client, second_class, newcomer).status_code == 201
+
+    def assert_refreshed(teacher, group):
+        app.dependency_overrides[get_current_user] = lambda: teacher
+        refreshed = client.get(
+            f"/api/v1/classes/{group.id}/registrations", params={"status": "all"}
+        )
+        assert refreshed.status_code == 200
+        assert {row["student_number"]: row["status"] for row in refreshed.json()["items"]} == {
+            applicant.student_number: "APPROVED",
+            newcomer.student_number: "PENDING",
+        }
+
+    assert_refreshed(first_teacher, first_class)
+    assert_refreshed(second_teacher, second_class)
+
+    del app.dependency_overrides[get_current_user]
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": applicant.student_number, "password": "Registration-pass-123"},
+    )
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    classes = client.get("/api/v1/student/classes", headers=headers).json()["items"]
+    assert {(row["id"], row["teacher_name"]) for row in classes} == {
+        (first_class.id, first_teacher.display_name),
+        (second_class.id, second_teacher.display_name),
+    }
+    for group in (first_class, second_class):
+        assert client.get(f"/api/v1/student/classes/{group.id}", headers=headers).status_code == 200
+    assert client.get(f"/api/v1/student/classes/{unrelated.id}", headers=headers).status_code == 404
 
 
 def test_shared_batch_cannot_include_students_outside_teacher_roster(

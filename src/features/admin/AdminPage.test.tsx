@@ -37,7 +37,7 @@ vi.mock('../../app/auth', () => ({
 }));
 
 vi.mock('./temporary-password', () => ({
-  generateTemporaryPassword: () => 'Abcd2345Efgh6789',
+  generateTemporaryPassword: () => '04268135',
 }));
 
 function userPage(items = [teacher], total = items.length, pageSize = 20) {
@@ -123,14 +123,14 @@ describe('AdminPage', () => {
     expect(api.adminUsers.create).toHaveBeenCalledWith({
       display_name: '李老师',
       username: 'li02',
-      temporary_password: 'Abcd2345Efgh6789',
+      temporary_password: '04268135',
     });
     expect(await screen.findByRole('heading', { name: '一次性登录凭据' })).toBeInTheDocument();
-    expect(screen.getByText('Abcd2345Efgh6789')).toBeInTheDocument();
+    expect(screen.getByText('04268135')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '复制登录凭据' }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Abcd2345Efgh6789'));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('04268135'));
     await userEvent.click(screen.getByRole('button', { name: '完成' }));
-    expect(screen.queryByText('Abcd2345Efgh6789')).not.toBeInTheDocument();
+    expect(screen.queryByText('04268135')).not.toBeInTheDocument();
   });
 
   it('keeps create form values when the API rejects the username', async () => {
@@ -169,9 +169,9 @@ describe('AdminPage', () => {
     expect(screen.getByText(/下次登录后必须修改密码/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '确认重置' }));
 
-    expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('teacher-1', 'Abcd2345Efgh6789');
+    expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('teacher-1', '04268135');
     expect(await screen.findByRole('heading', { name: '一次性登录凭据' })).toBeInTheDocument();
-    expect(screen.getByText('Abcd2345Efgh6789')).toBeInTheDocument();
+    expect(screen.getByText('04268135')).toBeInTheDocument();
   });
 
   it('lets the administrator find a student by number and reset that account', async () => {
@@ -189,10 +189,10 @@ describe('AdminPage', () => {
     await userEvent.click(screen.getAllByRole('button', { name: '重置张同学密码' })[0]);
     expect(screen.getByRole('heading', { name: '重置学生密码' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '确认重置' }));
-    expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('student-1', 'Abcd2345Efgh6789');
+    expect(api.adminUsers.resetPassword).toHaveBeenCalledWith('student-1', '04268135');
     const credentials = await screen.findByRole('dialog', { name: '一次性登录凭据' });
     expect(within(credentials).getByText('学号')).toBeInTheDocument();
-    expect(screen.getByText('Abcd2345Efgh6789')).toBeInTheDocument();
+    expect(screen.getByText('04268135')).toBeInTheDocument();
   });
 
   it('offers a retry when the account list fails', async () => {

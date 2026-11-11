@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import MetaData, create_engine, text
+from sqlalchemy import MetaData, create_engine, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -199,7 +199,7 @@ def test_teacher_controls_visibility_and_provisions_account(portal_client, porta
     db.add(Enrollment(class_group_id=group.id, student_id=student.id))
     db.commit()
     endpoint = f"/api/v1/classes/{group.id}/students/{student.id}/account"
-    password = "Initial-password-123"
+    password = "01234567"
     assert client.post(endpoint, json={"temporary_password": password}).status_code == 201
     account = db.query(User).filter_by(student_id=student.id).one()
     assert verify_password(account.password_hash, password)
@@ -278,6 +278,136 @@ def test_teacher_cannot_change_other_teachers_visibility(portal_client, portal_c
         ).status_code
         == 404
     )
+
+
+def test_teacher_resets_own_student_password_and_revokes_old_sessions(
+    portal_client, portal_context
+):
+    from attendance_api.models import AuditLog, LoginSession
+    from attendance_api.modules.auth.dependencies import get_current_user
+    from attendance_api.modules.auth.service import login
+    from attendance_api.security.passwords import hash_password, verify_password
+
+    client, app = portal_client
+    db, teacher, user, group, other = portal_context
+    user.password_hash = hash_password("Old-student-password")
+    old = login(
+        db,
+        username=user.username,
+        password="Old-student-password",
+        ip_address="test",
+        user_agent="test",
+    )
+    app.dependency_overrides[get_current_user] = lambda: teacher
+    url = f"/api/v1/classes/{group.id}/students/{user.student_id}/reset-password"
+    response = client.post(url, json={"temporary_password": "02468135"})
+    assert response.status_code == 200
+    assert response.json() == {"username": user.username}
+    assert response.headers["cache-control"] == "no-store"
+    assert user.must_change_password
+    assert verify_password(user.password_hash, "02468135")
+    assert all(
+        row.revoked_at
+        for row in db.scalars(select(LoginSession).where(LoginSession.user_id == user.id))
+    )
+    event = db.scalar(select(AuditLog).where(AuditLog.action == "USER_PASSWORD_RESET"))
+    assert event.actor_user_id == teacher.id
+    assert "password" not in str(event.after_value).replace("must_change_password", "")
+
+    del app.dependency_overrides[get_current_user]
+    assert (
+        client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {old.access_token}"}
+        ).status_code
+        == 401
+    )
+    signed_in = client.post(
+        "/api/v1/auth/login", json={"username": user.username, "password": "02468135"}
+    )
+    assert signed_in.status_code == 200
+    headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
+    assert client.get("/api/v1/student/classes", headers=headers).status_code == 403
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "02468135", "new_password": "New-student-password"},
+        headers=headers,
+    )
+    assert changed.status_code == 200
+    assert not changed.json()["user"]["must_change_password"]
+
+
+@pytest.mark.parametrize("password", ["1234567", "123456789", "1234abcd", "１２３４５６７８"])
+def test_teacher_rejects_invalid_short_temporary_passwords(portal_client, portal_context, password):
+    from attendance_api.modules.auth.dependencies import get_current_user
+
+    client, app = portal_client
+    db, teacher, user, group, other = portal_context
+    original_hash = user.password_hash
+    app.dependency_overrides[get_current_user] = lambda: teacher
+    response = client.post(
+        f"/api/v1/classes/{group.id}/students/{user.student_id}/reset-password",
+        json={"temporary_password": password},
+    )
+    assert response.status_code == 400
+    assert user.password_hash == original_hash
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("student", 403),
+        ("other_teacher", 404),
+        ("other_class", 404),
+        ("removed", 404),
+        ("archived_class", 409),
+        ("archived_course", 409),
+        ("no_account", 404),
+        ("short", 400),
+    ],
+)
+def test_teacher_password_reset_is_scoped(portal_client, portal_context, case, expected):
+    from attendance_api.modules.auth.dependencies import get_current_user
+    from attendance_api.security.passwords import hash_password, verify_password
+
+    client, app = portal_client
+    db, teacher, user, group, other = portal_context
+    user.password_hash = hash_password("Original-password-123")
+    student_id = user.student_id
+    class_id = group.id
+    actor = teacher
+    if case == "student":
+        actor = user
+    if case == "other_teacher":
+        actor = User(
+            username="outsider",
+            display_name="Other",
+            role="TEACHER",
+            password_hash="test",
+            must_change_password=False,
+        )
+        db.add(actor)
+    if case == "other_class":
+        class_id = other.id
+    if case == "removed":
+        db.scalar(select(Enrollment).where(Enrollment.student_id == student_id)).status = "REMOVED"
+    if case == "archived_class":
+        group.status = "ARCHIVED"
+    if case == "archived_course":
+        db.get(Course, group.course_id).status = "ARCHIVED"
+    if case == "no_account":
+        student = Student(student_number="new", name="No account")
+        db.add(student)
+        db.flush()
+        db.add(Enrollment(class_group_id=group.id, student_id=student.id))
+        student_id = student.id
+    db.commit()
+    app.dependency_overrides[get_current_user] = lambda: actor
+    result = client.post(
+        f"/api/v1/classes/{class_id}/students/{student_id}/reset-password",
+        json={"temporary_password": "short" if case == "short" else "New-password-123"},
+    )
+    assert result.status_code == expected
+    assert verify_password(user.password_hash, "Original-password-123")
 
 
 def test_student_login_and_mandatory_password_change(portal_client, portal_context):

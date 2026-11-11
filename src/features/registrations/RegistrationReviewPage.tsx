@@ -26,11 +26,21 @@ export function RegistrationReviewPage() {
       client.invalidateQueries({ queryKey: ['registrations'] }),
       client.invalidateQueries({ queryKey: ['monitor-management'] }),
     ]);
+    setStatus('all');
     toast.show(`已处理 ${result.reviewed} 条注册申请`);
   } });
+  function refreshApplications() {
+    if (status === 'all') {
+      void query.refetch();
+    } else {
+      setStatus('all');
+      setSelected([]);
+      mutation.reset();
+    }
+  }
   return <section className="page" style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-    <header className="page-header"><div><p className="eyebrow">班级账号管理</p><h1>学生注册审核</h1><p>核对本人身份后再通过。通过将开通学生统一账号，不能查看或设置其密码。</p></div><Link className="btn btn-secondary" to={user?.role === 'TEACHER' ? `/classes/${classId}/roster` : '/student'}>返回班级</Link></header>
-    <div className="toolbar"><label className="field"><span>申请状态</span><select disabled={mutation.isPending} value={status} onChange={(e) => { setStatus(e.target.value); setSelected([]); mutation.reset(); }}><option value="PENDING">待审核</option><option value="APPROVED">已通过</option><option value="REJECTED">已驳回</option><option value="all">全部申请</option></select></label><button className="btn btn-secondary" disabled={mutation.isPending} onClick={() => void query.refetch()}>{query.isFetching ? '正在刷新…' : '刷新申请'}</button></div>
+    <header className="page-header"><div><p className="eyebrow">班级账号管理</p><h1>学生注册审核</h1><p>核对本人身份后再通过。通过将开通学生统一账号，不能查看或设置其密码。</p></div><Link className="btn btn-secondary" to={user?.role === 'TEACHER' ? `/classes/${classId}/roster` : `/student?class=${encodeURIComponent(classId)}`}>返回班级</Link></header>
+    <div className="toolbar"><label className="field"><span>申请状态</span><select disabled={mutation.isPending} value={status} onChange={(e) => { setStatus(e.target.value); setSelected([]); mutation.reset(); }}><option value="all">全部申请</option><option value="PENDING">待审核</option><option value="APPROVED">已通过</option><option value="REJECTED">已驳回</option></select></label><button className="btn btn-secondary" disabled={mutation.isPending} onClick={refreshApplications}>{query.isFetching ? '正在刷新…' : '刷新申请'}</button></div>
     {mutation.error && <div className="form-alert" role="alert">{mutation.error.message}</div>}
     {query.isLoading ? <LoadingState /> : query.error ? <ErrorState message={query.error.message} retry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyState title="暂无匹配的注册申请" description={status === 'all' ? '学生可在登录页提交注册申请，新申请会自动刷新。' : '可切换到全部申请查看其他状态的记录。'} /> : <>
       <label className="field"><span>审核备注（选填，驳回时向学生说明原因）</span><input maxLength={500} disabled={mutation.isPending} value={reason} onChange={(e) => setReason(e.target.value)} /></label>

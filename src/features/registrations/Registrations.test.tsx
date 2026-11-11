@@ -71,8 +71,12 @@ it('keeps the first result visible and can review the next applicant after refre
     return { reviewed: 1 };
   });
   mount(<RegistrationReviewPage />, true);
+  await user.selectOptions(screen.getByLabelText('申请状态'), 'PENDING');
   await user.click(await screen.findByRole('button', { name: '通过' }));
   expect(await screen.findByRole('cell', { name: '已通过' })).toBeInTheDocument();
+  expect(screen.getByLabelText('申请状态')).toHaveValue('all');
+  await user.selectOptions(screen.getByLabelText('申请状态'), 'APPROVED');
+  await screen.findByRole('cell', { name: '已通过' });
   items = [...items, second];
   await user.click(screen.getByRole('button', { name: '刷新申请' }));
   expect(await screen.findByText('第二位同学')).toBeInTheDocument();

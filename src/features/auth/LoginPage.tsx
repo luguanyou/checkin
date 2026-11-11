@@ -24,6 +24,9 @@ export function LoginPage() {
       {serverError && <div className="form-alert" role="alert">{serverError}</div>}
       <button className="btn btn-primary btn-block" type="submit" disabled={pending}>{pending ? '正在登录...' : '登录'}</button>
     </form><Link className="btn btn-ghost btn-block" to="/register">学生注册</Link>
-    <p className="form-note">学生忘记密码时，请向系统管理员提供学号，核对身份后领取临时密码。</p>
+    <details className="form-note">
+      <summary>忘记密码？</summary>
+      <p>请向任课老师或超级管理员提供学号，核对身份后领取临时密码。老师可在班级「学生名单」中点击「重置密码」，超级管理员可在「学生账号」中重置。使用临时密码登录后，按提示设置新密码。</p>
+    </details>
   </section></main>;
 }
