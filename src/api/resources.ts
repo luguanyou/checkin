@@ -127,6 +127,9 @@ export function createApi(client: ApiClient) {
       updateRecord: (recordId: string, input: { status: string; expected_version: number; client_mutation_id: string; reason?: string }) => client.request<AttendanceRecord>(`/attendance-records/${recordId}`, json('PATCH', input)),
       complete: (sessionId: string) => client.request<AttendanceSessionBase>(`/attendance-sessions/${sessionId}/complete`, { method: 'POST' }),
       export: (sessionId: string, format: 'csv' | 'xlsx') => client.download(`/attendance-sessions/${sessionId}/export?format=${format}`),
+      exportCourse: (courseId: string, classId?: string) => client.download(`/courses/${courseId}/attendance-export${queryString({ class_group_id: classId })}`),
+      exportTemplate: (courseId: string, classId?: string) => client.download(`/courses/${courseId}/attendance-template-export${queryString({ class_group_id: classId })}`),
+      exportScores: (courseId: string, classId?: string) => client.download(`/courses/${courseId}/scores-export${queryString({ class_group_id: classId })}`),
     },
     tts: {
       /** 服务器语音合成（点名播报兜底），返回音频 Blob */

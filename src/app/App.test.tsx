@@ -60,7 +60,7 @@ describe('App', () => {
     render(<App />);
     await screen.findByRole('heading', { name: '登录课点' });
     await userEvent.click(screen.getByRole('button', { name: '登录' }));
-    expect(screen.getByText('请输入用户名')).toBeInTheDocument();
+    expect(screen.getByText('请输入学号或账号')).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -72,7 +72,7 @@ describe('App', () => {
     render(<App />);
     await screen.findByRole('heading', { name: '登录课点' });
 
-    await userEvent.type(screen.getByLabelText('用户名'), 'admin');
+    await userEvent.type(screen.getByLabelText('学号 / 账号'), 'admin');
     await userEvent.type(screen.getByLabelText('密码'), 'short-pass');
     await userEvent.click(screen.getByRole('button', { name: '登录' }));
 
@@ -94,7 +94,7 @@ describe('App', () => {
     render(<App />);
     await screen.findByRole('heading', { name: '登录课点' });
 
-    await userEvent.type(screen.getByLabelText('用户名'), 'admin');
+    await userEvent.type(screen.getByLabelText('学号 / 账号'), 'admin');
     await userEvent.type(screen.getByLabelText('密码'), 'configured-admin-password');
     await userEvent.click(screen.getByRole('button', { name: '登录' }));
 

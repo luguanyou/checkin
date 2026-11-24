@@ -30,7 +30,7 @@ export function StudentAccountDialog({ classId, student, onClose }: { classId: s
   const api = useApi(); const [password] = useState(() => generateTemporaryPassword()); const [username, setUsername] = useState('');
   const save = useMutation({ mutationFn: () => api.portal.createAccount(classId, student.id, password), onSuccess: (data) => { setUsername(data.username); } });
   return <Dialog title="开通学生账号" description={`${student.name} · ${student.student_number}`} onClose={() => { if (!save.isPending) onClose(); }} footer={<button className="btn btn-secondary" onClick={onClose} disabled={save.isPending}>{username ? '完成' : '取消'}</button>}>
-    {username ? <><p>账号已开通，登录用户名：<strong>{username}</strong>。请单独告知学生临时密码，首次登录必须修改密码。同一账号可查看本人各班级已开放的数据。</p><label className="field"><span>临时密码</span><input readOnly value={password} /></label></> : <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+    {username ? <><p>账号已开通，登录学号：<strong>{username}</strong>。请单独告知学生临时密码，首次登录必须修改密码。同一账号可查看本人各班级已开放的数据。</p><label className="field"><span>临时密码</span><input readOnly value={password} /></label></> : <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
       <p className="form-note">确认开通后显示系统随机生成的 8 位数字临时密码，首次登录必须修改。已有账号忘记密码时，请关闭弹窗，点击该学生的「重置密码」。</p>
       {save.error && <div className="form-alert" role="alert">{save.error.message}</div>}<button className="btn btn-primary" disabled={save.isPending}>{save.isPending ? '正在开通...' : '确认开通'}</button>
     </form>}

@@ -12,7 +12,7 @@ beforeEach(() => { localStorage.clear(); login.mockReset().mockResolvedValue({})
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 function showLogin() { return render(<MemoryRouter><ToastProvider><LoginPage /></ToastProvider></MemoryRouter>); }
 async function enterCredentials() {
-  await userEvent.type(screen.getByLabelText('用户名'), 'teacher');
+  await userEvent.type(screen.getByLabelText('学号 / 账号'), 'teacher');
   await userEvent.type(screen.getByLabelText('密码'), 'saved-password');
 }
 
@@ -30,7 +30,7 @@ it('restores both fields on the next visit after a successful opted-in login wit
   await waitFor(() => expect(login).toHaveBeenCalledWith('teacher', 'saved-password'));
   first.unmount(); showLogin();
   expect(screen.getByRole('checkbox', { name: '记住密码' })).toBeChecked();
-  expect(screen.getByLabelText('用户名')).toHaveValue('teacher');
+  expect(screen.getByLabelText('学号 / 账号')).toHaveValue('teacher');
   expect(screen.getByLabelText('密码')).toHaveValue('saved-password');
 });
 
@@ -40,7 +40,7 @@ it('clears saved credentials immediately when unchecked, even without logging in
   await userEvent.click(screen.getByRole('checkbox', { name: '记住密码' }));
   expect(localStorage.getItem(key)).toBeNull();
   first.unmount(); showLogin();
-  expect(screen.getByLabelText('用户名')).toHaveValue('');
+  expect(screen.getByLabelText('学号 / 账号')).toHaveValue('');
   expect(screen.getByLabelText('密码')).toHaveValue('');
 });
 
@@ -63,7 +63,7 @@ it('does not save credentials when remembering is off', async () => {
 it.each(['true', '{broken', 'null', '{"username":42,"password":"test"}'])('ignores legacy or damaged saved data: %s', (value) => {
   localStorage.setItem(key, value); showLogin();
   expect(screen.getByRole('checkbox', { name: '记住密码' })).not.toBeChecked();
-  expect(screen.getByLabelText('用户名')).toHaveValue('');
+  expect(screen.getByLabelText('学号 / 账号')).toHaveValue('');
 });
 
 it('reports a storage failure without failing authentication', async () => {

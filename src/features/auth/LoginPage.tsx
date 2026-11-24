@@ -16,7 +16,7 @@ export function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({}); const [serverError, setServerError] = useState(''); const [pending, setPending] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault(); const next: Record<string, string> = {};
-    if (!username.trim()) next.username = '请输入用户名';
+    if (!username.trim()) next.username = '请输入学号或账号';
     if (!password) next.password = '请输入密码';
     setErrors(next); if (Object.keys(next).length) return;
     setPending(true); setServerError('');
@@ -31,7 +31,8 @@ export function LoginPage() {
     <div className="auth-brand"><span aria-hidden="true">课</span><strong>课点</strong></div>
     <div className="auth-copy"><p className="eyebrow">课堂管理与学生查询</p><h1 id="login-title">登录课点</h1><p>教师管理课堂；学生可自助注册，审核通过后用学号登录。</p></div>
     <form onSubmit={submit} noValidate>
-      <label className="field"><span>用户名</span><span className="input-wrap"><UserRound aria-hidden="true" /><input name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} aria-invalid={Boolean(errors.username)} /></span>{errors.username && <small className="field-error">{errors.username}</small>}</label>
+      <label className="field"><span>学号 / 账号</span><span className="input-wrap"><UserRound aria-hidden="true" /><input name="username" autoComplete="username" placeholder="学生请输入学号" aria-describedby="login-account-hint" value={username} onChange={(e) => setUsername(e.target.value)} aria-invalid={Boolean(errors.username)} /></span>{errors.username && <small className="field-error">{errors.username}</small>}</label>
+      <p className="form-note" id="login-account-hint">学生请填写学号，不要填写姓名；教师和管理员请填写账号。</p>
       <label className="field"><span>密码</span><span className="input-wrap"><LockKeyhole aria-hidden="true" /><input name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={Boolean(errors.password)} /></span>{errors.password && <small className="field-error">{errors.password}</small>}</label>
       <label className="remember-password"><input type="checkbox" checked={remember} disabled={pending} aria-describedby="remember-password-note" onChange={(e) => {
         setRemember(e.target.checked);

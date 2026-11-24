@@ -125,6 +125,9 @@ async function installApi(page, data) {
     const recordMatch = endpoint.match(/^\/api\/v1\/attendance-records\/(r\d+)$/);
     if (recordMatch && method === 'PATCH') { const body = request.postDataJSON(); const record = data.records.find((item) => item.id === recordMatch[1]); if (body.expected_version !== record.version) return error('ATTENDANCE_RECORD_CONFLICT', '记录已被修改', 409); Object.assign(record, { status: body.status, version: record.version + 1, marked_at: record.marked_at || '2026-09-03T01:02:00Z', last_modified_at: '2026-09-03T01:02:00Z' }); data.summary(); return json(record); }
     if (endpoint === '/api/v1/attendance-sessions/session-1/complete' && method === 'POST') { data.session.status = 'COMPLETED'; data.session.completed_at = '2026-09-03T01:05:00Z'; return json({ ...data.session, records: undefined, summary: data.summary() }); }
+    if (endpoint === '/api/v1/courses/course-1/attendance-export') return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': "attachment; filename*=UTF-8''course-attendance.xlsx" }, body: 'course export' });
+    if (endpoint === '/api/v1/courses/course-1/attendance-template-export') return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': "attachment; filename*=UTF-8''attendance-register.xlsx" }, body: 'template export' });
+    if (endpoint === '/api/v1/courses/course-1/scores-export') return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': "attachment; filename*=UTF-8''course-scores.xlsx" }, body: 'scores export' });
     if (endpoint === '/api/v1/attendance-sessions/session-1/export') return route.fulfill({ status: 200, headers: { 'Content-Type': url.searchParams.get('format') === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': "attachment; filename*=UTF-8''attendance.xlsx" }, body: 'attendance export' });
     return error('NOT_FOUND', `Unhandled ${method} ${endpoint}`, 404);
   });
@@ -171,7 +174,7 @@ async function run() {
     await signupPage.getByRole('link', { name: '返回登录', exact: true }).click();
     await signupPage.getByText('忘记密码？', { exact: true }).click();
     await signupPage.getByText(/核对身份后领取临时密码/).waitFor();
-    await signupPage.getByLabel('用户名', { exact: true }).fill('009'); await signupPage.getByLabel('密码', { exact: true }).fill('Student-password-123');
+    await signupPage.getByLabel('学号 / 账号', { exact: true }).fill('009'); await signupPage.getByLabel('密码', { exact: true }).fill('Student-password-123');
     await signupPage.getByRole('button', { name: '登录', exact: true }).click(); await signupPage.getByRole('heading', { name: '我的课程' }).waitFor();
     const coursePicker = signupPage.getByLabel('课程班级');
     await coursePicker.waitFor();
@@ -227,7 +230,7 @@ async function run() {
     watchPage(adminPage);
     const adminFixtures = createFixtures('ADMIN'); await installApi(adminPage, adminFixtures); await adminPage.goto(baseUrl);
     await adminPage.getByRole('heading', { name: '登录课点' }).waitFor();
-    await adminPage.getByLabel('用户名').fill('admin'); await adminPage.getByLabel('密码', { exact: true }).fill('short-pass'); await adminPage.getByRole('button', { name: '登录' }).click();
+    await adminPage.getByLabel('学号 / 账号').fill('admin'); await adminPage.getByLabel('密码', { exact: true }).fill('short-pass'); await adminPage.getByRole('button', { name: '登录' }).click();
     await adminPage.getByRole('heading', { name: '教师账号' }).waitFor();
     assert.equal(new URL(adminPage.url()).pathname, '/admin');
     assert.equal(adminFixtures.requests.filter((request) => request === 'POST /api/v1/auth/login').length, 1);
@@ -274,22 +277,22 @@ async function run() {
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await rememberPassword.check();
-    await page.getByLabel('用户名').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password'); await page.getByRole('button', { name: '登录' }).click();
+    await page.getByLabel('学号 / 账号').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password'); await page.getByRole('button', { name: '登录' }).click();
     await page.getByRole('heading', { name: '工作台' }).waitFor();
     await page.getByRole('button', { name: '退出登录', exact: true }).click();
     await page.getByRole('heading', { name: '登录课点' }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: '登录课点' }).waitFor();
-    assert.equal(await page.getByLabel('用户名', { exact: true }).inputValue(), 'teacher01');
+    assert.equal(await page.getByLabel('学号 / 账号', { exact: true }).inputValue(), 'teacher01');
     assert.equal(await page.getByLabel('密码', { exact: true }).inputValue(), 'correct-password');
     assert.equal(await rememberPassword.isChecked(), true);
     await rememberPassword.uncheck();
     await page.reload();
     await page.getByRole('heading', { name: '登录课点' }).waitFor();
-    assert.equal(await page.getByLabel('用户名', { exact: true }).inputValue(), '');
+    assert.equal(await page.getByLabel('学号 / 账号', { exact: true }).inputValue(), '');
     assert.equal(await page.getByLabel('密码', { exact: true }).inputValue(), '');
     assert.equal(await rememberPassword.isChecked(), false);
-    await page.getByLabel('用户名').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password');
+    await page.getByLabel('学号 / 账号').fill('teacher01'); await page.getByLabel('密码', { exact: true }).fill('correct-password');
     await page.getByRole('button', { name: '登录', exact: true }).click();
     await page.getByRole('heading', { name: '工作台' }).waitFor();
     assert.equal(await page.locator('.metric').count(), 3);
@@ -339,6 +342,25 @@ async function run() {
     await page.getByRole('button', { name: '结束点名' }).click(); await page.getByRole('button', { name: '确认结束' }).click(); await page.getByRole('heading', { name: '产品设计方法' }).waitFor();
     await page.getByRole('button', { name: '修正' }).last().click(); await page.getByLabel('修正原因').fill('学生课间到场补签'); await page.getByRole('combobox', { name: '考勤状态' }).selectOption('late'); await page.getByRole('button', { name: '确认修正' }).click(); await page.getByText('考勤状态已修正').waitFor();
     await page.getByRole('button', { name: '导出记录' }).click(); const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: '生成文件' }).click(); const download = await downloadPromise; assert.equal(download.suggestedFilename(), 'attendance.xlsx');
+    await page.goto(`${baseUrl}/records?course_id=course-1&class_group_id=class-1&status=DRAFT&date_from=2026-01-01`);
+    await page.getByRole('button', { name: '导出课程考勤' }).click();
+    await page.getByText('导出所选课程、班级全部已完成场次，不受列表日期、状态和分页影响。').waitFor();
+    const courseDownloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: '生成 Excel' }).click();
+    assert.equal((await courseDownloadPromise).suggestedFilename(), 'course-attendance.xlsx');
+    assert.ok(fixtures.requests.includes('GET /api/v1/courses/course-1/attendance-export'));
+    await page.getByRole('button', { name: '按模板导出（含平时分）' }).click();
+    await page.getByText(/平时分沿用/).waitFor();
+    const templateDownloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: '生成 Excel' }).click();
+    assert.equal((await templateDownloadPromise).suggestedFilename(), 'attendance-register.xlsx');
+    assert.ok(fixtures.requests.includes('GET /api/v1/courses/course-1/attendance-template-export'));
+    await page.getByRole('button', { name: '导出平时分', exact: true }).click();
+    await page.getByText(/导出每位学生的百分制平时分/).waitFor();
+    const scoreListDownloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: '生成 Excel' }).click();
+    assert.equal((await scoreListDownloadPromise).suggestedFilename(), 'course-scores.xlsx');
+    assert.ok(fixtures.requests.includes('GET /api/v1/courses/course-1/scores-export'));
 
     await page.getByRole('link', { name: '平时成绩', exact: true }).first().click();
     await page.getByRole('heading', { name: '平时成绩', exact: true }).waitFor();
